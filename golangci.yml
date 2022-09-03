@@ -1,0 +1,24 @@
+linters:
+  # enable-all: true
+  enable:
+    - unconvert
+    - lll
+    - unparam
+    - goimports
+    - unparam
+    - gofumpt
+    - revive
+    - unconvert
+    - gocognit
+    - errcheck
+
+linters-settings:
+  gocognit:
+    # This too high
+    min-complexity: 90
+  lll:
+    line-length: 130
+  gofumpt:
+    extra-rules: true
+  revive:
+    severity: warning

@@ -1,44 +1,23 @@
-.PHONY: all clean clean-coverage install install-dependencies install-tools lint test test-verbose test-with-coverage
+.PHONY: install-tools lint test test-verbose format benchmark
 
-export ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-export PKG := github.com/sergi/go-diff
-export ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-
-$(eval $(ARGS):;@:) # turn arguments into do-nothing targets
-export ARGS
-
-ifdef ARGS
-	PKG_TEST := $(ARGS)
-else
-	PKG_TEST := $(PKG)/...
-endif
-
-all: install-tools install-dependencies install lint test
-
-clean:
-	go clean -i $(PKG)/...
-	go clean -i -race $(PKG)/...
-clean-coverage:
-	find $(ROOT_DIR) | grep .coverprofile | xargs rm
-install:
-	go install -v $(PKG)/...
-install-dependencies:
-	go get -t -v $(PKG)/...
-	go build -v $(PKG)/...
 install-tools:
 	# Install linting tools
-	go get -u -v golang.org/x/lint/...
-	go get -u -v github.com/kisielk/errcheck/...
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0
+	go install mvdan.cc/gofumpt@latest
+	go install github.com/segmentio/golines@latest
 
-	# Install code coverage tools
-	go get -u -v github.com/onsi/ginkgo/ginkgo/...
-	go get -u -v github.com/modocache/gover/...
-	go get -u -v github.com/mattn/goveralls/...
 lint:
-	$(ROOT_DIR)/scripts/lint.sh
+	golangci-lint run -c ./golangci.yml ./...
+
+format:
+	gofumpt -l -w -extra .
+	golines . -w
+
 test:
-	go test -race -test.timeout 120s $(PKG_TEST)
+	go test -race -test.timeout 120s -count=1 ./...
+
 test-verbose:
-	go test -race -test.timeout 120s -v $(PKG_TEST)
-test-with-coverage:
-	ginkgo -r -cover -race -skipPackage="testdata"
+	go test -race -test.timeout 120s -v -cover -count=1 ./...
+
+benchmark:
+	go test -bench=. -benchmem ./...

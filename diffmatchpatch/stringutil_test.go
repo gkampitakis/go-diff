@@ -11,8 +11,6 @@ package diffmatchpatch
 import (
 	"fmt"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestRunesIndexOf(t *testing.T) {
@@ -37,7 +35,7 @@ func TestRunesIndexOf(t *testing.T) {
 		{"e", 6, -1},
 	} {
 		actual := runesIndexOf([]rune("abcde"), []rune(tc.Pattern), tc.Start)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -72,7 +70,7 @@ func TestIndexOf(t *testing.T) {
 		{"a\u03b2\u03b2c", "\u03b2", 6, -1},
 	} {
 		actual := indexOf(tc.String, tc.Pattern, tc.Position)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -111,6 +109,6 @@ func TestLastIndexOf(t *testing.T) {
 		{"a\u03b2\u03b2c", "\u03b2", 6, 3},
 	} {
 		actual := lastIndexOf(tc.String, tc.Pattern, tc.Position)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }

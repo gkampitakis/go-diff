@@ -11,8 +11,6 @@ package diffmatchpatch
 import (
 	"fmt"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMatchAlphabet(t *testing.T) {
@@ -45,7 +43,7 @@ func TestMatchAlphabet(t *testing.T) {
 		},
 	} {
 		actual := dmp.MatchAlphabet(tc.Pattern)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -76,7 +74,7 @@ func TestMatchBitap(t *testing.T) {
 		{"Oversized pattern", "abcdef", "xabcdefy", 0, 0},
 	} {
 		actual := dmp.MatchBitap(tc.Text, tc.Pattern, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	dmp.MatchThreshold = 0.4
@@ -85,7 +83,7 @@ func TestMatchBitap(t *testing.T) {
 		{"Threshold #1", "abcdefghijk", "efxyhi", 1, 4},
 	} {
 		actual := dmp.MatchBitap(tc.Text, tc.Pattern, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	dmp.MatchThreshold = 0.3
@@ -94,7 +92,7 @@ func TestMatchBitap(t *testing.T) {
 		{"Threshold #2", "abcdefghijk", "efxyhi", 1, -1},
 	} {
 		actual := dmp.MatchBitap(tc.Text, tc.Pattern, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	dmp.MatchThreshold = 0.0
@@ -103,7 +101,7 @@ func TestMatchBitap(t *testing.T) {
 		{"Threshold #3", "abcdefghijk", "bcdef", 1, 1},
 	} {
 		actual := dmp.MatchBitap(tc.Text, tc.Pattern, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	dmp.MatchThreshold = 0.5
@@ -113,7 +111,7 @@ func TestMatchBitap(t *testing.T) {
 		{"Multiple select #2", "abcdexyzabcde", "abccde", 5, 8},
 	} {
 		actual := dmp.MatchBitap(tc.Text, tc.Pattern, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	// Strict location.
@@ -124,7 +122,7 @@ func TestMatchBitap(t *testing.T) {
 		{"Distance test #2", "abcdefghijklmnopqrstuvwxyz", "abcdxxefg", 1, 0},
 	} {
 		actual := dmp.MatchBitap(tc.Text, tc.Pattern, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	// Loose location.
@@ -134,7 +132,7 @@ func TestMatchBitap(t *testing.T) {
 		{"Distance test #3", "abcdefghijklmnopqrstuvwxyz", "abcdefg", 24, 0},
 	} {
 		actual := dmp.MatchBitap(tc.Text, tc.Pattern, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
@@ -160,7 +158,7 @@ func TestMatchMain(t *testing.T) {
 		{"Oversized pattern", "abcdef", "abcdefy", 0, 0},
 	} {
 		actual := dmp.MatchMain(tc.Text1, tc.Text2, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	dmp.MatchThreshold = 0.7
@@ -169,6 +167,6 @@ func TestMatchMain(t *testing.T) {
 		{"Complex match", "I am the very model of a modern major general.", " that berry ", 5, 4},
 	} {
 		actual := dmp.MatchMain(tc.Text1, tc.Text2, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }

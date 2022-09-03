@@ -34,7 +34,7 @@ const (
 	DiffInsert Operation = 1
 	// DiffEqual item represents an equal diff.
 	DiffEqual Operation = 0
-	//IndexSeparator is used to seperate the array indexes in an index string
+	// IndexSeparator is used to seperate the array indexes in an index string
 	IndexSeparator = ","
 )
 
@@ -45,7 +45,7 @@ type Diff struct {
 }
 
 // splice removes amount elements from slice at index index, replacing them with elements.
-func splice(slice []Diff, index int, amount int, elements ...Diff) []Diff {
+func splice(slice []Diff, index, amount int, elements ...Diff) []Diff {
 	if len(elements) == amount {
 		// Easy case: overwrite the relevant items.
 		copy(slice[index:], elements)
@@ -97,7 +97,11 @@ func (dmp *DiffMatchPatch) DiffMainRunes(text1, text2 []rune, checklines bool) [
 	return dmp.diffMainRunes(text1, text2, checklines, deadline)
 }
 
-func (dmp *DiffMatchPatch) diffMainRunes(text1, text2 []rune, checklines bool, deadline time.Time) []Diff {
+func (dmp *DiffMatchPatch) diffMainRunes(
+	text1, text2 []rune,
+	checklines bool,
+	deadline time.Time,
+) []Diff {
 	if runesEqual(text1, text2) {
 		var diffs []Diff
 		if len(text1) > 0 {
@@ -131,8 +135,13 @@ func (dmp *DiffMatchPatch) diffMainRunes(text1, text2 []rune, checklines bool, d
 	return dmp.DiffCleanupMerge(diffs)
 }
 
-// diffCompute finds the differences between two rune slices.  Assumes that the texts do not have any common prefix or suffix.
-func (dmp *DiffMatchPatch) diffCompute(text1, text2 []rune, checklines bool, deadline time.Time) []Diff {
+// diffCompute finds the differences between two rune slices.
+// Assumes that the texts do not have any common prefix or suffix.
+func (dmp *DiffMatchPatch) diffCompute(
+	text1, text2 []rune,
+	checklines bool,
+	deadline time.Time,
+) []Diff {
 	diffs := []Diff{}
 	if len(text1) == 0 {
 		// Just add some text (speedup).
@@ -159,9 +168,9 @@ func (dmp *DiffMatchPatch) diffCompute(text1, text2 []rune, checklines bool, dea
 		}
 		// Shorter text is inside the longer text (speedup).
 		return []Diff{
-			Diff{op, string(longtext[:i])},
-			Diff{DiffEqual, string(shorttext)},
-			Diff{op, string(longtext[i+len(shorttext):])},
+			{op, string(longtext[:i])},
+			{DiffEqual, string(shorttext)},
+			{op, string(longtext[i+len(shorttext):])},
 		}
 	} else if len(shorttext) == 1 {
 		// Single character string.
@@ -192,7 +201,8 @@ func (dmp *DiffMatchPatch) diffCompute(text1, text2 []rune, checklines bool, dea
 	return dmp.diffBisect(text1, text2, deadline)
 }
 
-// diffLineMode does a quick line-level diff on both []runes, then rediff the parts for greater accuracy. This speedup can produce non-minimal diffs.
+// diffLineMode does a quick line-level diff on both []runes,
+// then rediff the parts for greater accuracy. This speedup can produce non-minimal diffs.
 func (dmp *DiffMatchPatch) diffLineMode(text1, text2 []rune, deadline time.Time) []Diff {
 	// Scan the text on a line-by-line basis first.
 	text1, text2, linearray := dmp.DiffLinesToRunes(string(text1), string(text2))
@@ -258,7 +268,9 @@ func (dmp *DiffMatchPatch) DiffBisect(text1, text2 string, deadline time.Time) [
 	return dmp.diffBisect([]rune(text1), []rune(text2), deadline)
 }
 
-// diffBisect finds the 'middle snake' of a diff, splits the problem in two and returns the recursively constructed diff.
+// diffBisect finds the 'middle snake' of a diff, splits the problem in two and returns
+// the recursively constructed diff.
+//
 // See Myers's 1986 paper: An O(ND) Difference Algorithm and Its Variations.
 func (dmp *DiffMatchPatch) diffBisect(runes1, runes2 []rune, deadline time.Time) []Diff {
 	// Cache the text lengths to prevent multiple calls.
@@ -338,7 +350,7 @@ func (dmp *DiffMatchPatch) diffBisect(runes1, runes2 []rune, deadline time.Time)
 			} else {
 				x2 = v2[k2Offset-1] + 1
 			}
-			var y2 = x2 - k2
+			y2 := x2 - k2
 			for x2 < runes1Len && y2 < runes2Len {
 				if runes1[runes1Len-x2-1] != runes2[runes2Len-y2-1] {
 					break
@@ -376,7 +388,8 @@ func (dmp *DiffMatchPatch) diffBisect(runes1, runes2 []rune, deadline time.Time)
 }
 
 func (dmp *DiffMatchPatch) diffBisectSplit(runes1, runes2 []rune, x, y int,
-	deadline time.Time) []Diff {
+	deadline time.Time,
+) []Diff {
 	runes1a := runes1[:x]
 	runes2a := runes2[:y]
 	runes1b := runes1[x:]
@@ -389,7 +402,8 @@ func (dmp *DiffMatchPatch) diffBisectSplit(runes1, runes2 []rune, x, y int,
 	return append(diffs, diffsb...)
 }
 
-// DiffLinesToChars splits two texts into a list of strings, and educes the texts to a string of hashes where each Unicode character represents one line.
+// DiffLinesToChars splits two texts into a list of strings, and educes the texts to
+// a string of hashes where each Unicode character represents one line.
 // It's slightly faster to call DiffLinesToRunes first, followed by DiffMainRunes.
 func (dmp *DiffMatchPatch) DiffLinesToChars(text1, text2 string) (string, string, []string) {
 	chars1, chars2, lineArray := dmp.diffLinesToStrings(text1, text2)
@@ -462,7 +476,7 @@ func commonSuffixLength(text1, text2 []rune) int {
 }
 
 // DiffCommonOverlap determines if the suffix of one string is the prefix of another.
-func (dmp *DiffMatchPatch) DiffCommonOverlap(text1 string, text2 string) int {
+func (dmp *DiffMatchPatch) DiffCommonOverlap(text1, text2 string) int {
 	// Cache the text lengths to prevent multiple calls.
 	text1Length := len(text1)
 	text2Length := len(text2)
@@ -482,7 +496,9 @@ func (dmp *DiffMatchPatch) DiffCommonOverlap(text1 string, text2 string) int {
 		return textLength
 	}
 
-	// Start by looking for a single character match and increase length until no match is found. Performance analysis: http://neil.fraser.name/news/2010/11/04/
+	// Start by looking for a single character match and increase length until no match is found.
+	//
+	// Performance analysis: http://neil.fraser.name/news/2010/11/04/
 	best := 0
 	length := 1
 	for {
@@ -501,7 +517,8 @@ func (dmp *DiffMatchPatch) DiffCommonOverlap(text1 string, text2 string) int {
 	return best
 }
 
-// DiffHalfMatch checks whether the two texts share a substring which is at least half the length of the longer text. This speedup can produce non-minimal diffs.
+// DiffHalfMatch checks whether the two texts share a substring which is at least half the length of the longer text.
+// This speedup can produce non-minimal diffs.
 func (dmp *DiffMatchPatch) DiffHalfMatch(text1, text2 string) []string {
 	// Unused in this code, but retained for interface compatibility.
 	runeSlices := dmp.diffHalfMatch([]rune(text1), []rune(text2))
@@ -541,7 +558,7 @@ func (dmp *DiffMatchPatch) diffHalfMatch(text1, text2 []rune) [][]rune {
 	// Check again based on the third quarter.
 	hm2 := dmp.diffHalfMatchI(longtext, shorttext, int(float64(len(longtext)+1)/2))
 
-	hm := [][]rune{}
+	var hm [][]rune
 	if hm1 == nil && hm2 == nil {
 		return nil
 	} else if hm2 == nil {
@@ -565,8 +582,9 @@ func (dmp *DiffMatchPatch) diffHalfMatch(text1, text2 []rune) [][]rune {
 	return [][]rune{hm[2], hm[3], hm[0], hm[1], hm[4]}
 }
 
-// diffHalfMatchI checks if a substring of shorttext exist within longtext such that the substring is at least half the length of longtext?
-// Returns a slice containing the prefix of longtext, the suffix of longtext, the prefix of shorttext, the suffix of shorttext and the common middle, or null if there was no match.
+// diffHalfMatchI checks if a substring of shorttext exist within longtext such that the substring
+// is at least half the length of longtext? Returns a slice containing the prefix of longtext, the suffix of longtext,
+// the prefix of shorttext, the suffix of shorttext and the common middle, or null if there was no match.
 func (dmp *DiffMatchPatch) diffHalfMatchI(l, s []rune, i int) [][]rune {
 	var bestCommonA []rune
 	var bestCommonB []rune
@@ -697,8 +715,7 @@ func (dmp *DiffMatchPatch) DiffCleanupSemantic(diffs []Diff) []Diff {
 
 					// Overlap found. Insert an equality and trim the surrounding edits.
 					diffs = splice(diffs, pointer, 0, Diff{DiffEqual, insertion[:overlapLength1]})
-					diffs[pointer-1].Text =
-						deletion[0 : len(deletion)-overlapLength1]
+					diffs[pointer-1].Text = deletion[0 : len(deletion)-overlapLength1]
 					diffs[pointer+1].Text = insertion[overlapLength1:]
 					pointer++
 				}
@@ -729,7 +746,6 @@ var (
 	whitespaceRegex      = regexp.MustCompile(`\s`)
 	linebreakRegex       = regexp.MustCompile(`[\r\n]`)
 	blanklineEndRegex    = regexp.MustCompile(`\n\r?\n$`)
-	blanklineStartRegex  = regexp.MustCompile(`^\r?\n\r?\n`)
 )
 
 // diffCleanupSemanticScore computes a score representing whether the internal boundary falls on logical boundaries.
@@ -740,7 +756,9 @@ func diffCleanupSemanticScore(one, two string) int {
 		return 6
 	}
 
-	// Each port of this function behaves slightly differently due to subtle differences in each language's definition of things like 'whitespace'.  Since this function's purpose is largely cosmetic, the choice has been made to use each language's native features rather than force total conformity.
+	// Each port of this function behaves slightly differently due to subtle differences in each language's
+	// definition of things like 'whitespace'.  Since this function's purpose is largely cosmetic,
+	// the choice has been made to use each language's native features rather than force total conformity.
 	rune1, _ := utf8.DecodeLastRuneInString(one)
 	rune2, _ := utf8.DecodeRuneInString(two)
 	char1 := string(rune1)
@@ -774,8 +792,10 @@ func diffCleanupSemanticScore(one, two string) int {
 	return 0
 }
 
-// DiffCleanupSemanticLossless looks for single edits surrounded on both sides by equalities which can be shifted sideways to align the edit to a word boundary.
-// E.g: The c<ins>at c</ins>ame. -> The <ins>cat </ins>came.
+// DiffCleanupSemanticLossless looks for single edits surrounded on both sides by equalities
+// which can be shifted sideways to align the edit to a word boundary.
+//
+//	e.g: The c<ins>at c</ins>ame. -> The <ins>cat </ins>came.
 func (dmp *DiffMatchPatch) DiffCleanupSemanticLossless(diffs []Diff) []Diff {
 	pointer := 1
 
@@ -976,12 +996,10 @@ func (dmp *DiffMatchPatch) DiffCleanupMerge(diffs []Diff) []Diff {
 			countInsert++
 			textInsert = append(textInsert, []rune(diffs[pointer].Text)...)
 			pointer++
-			break
 		case DiffDelete:
 			countDelete++
 			textDelete = append(textDelete, []rune(diffs[pointer].Text)...)
 			pointer++
-			break
 		case DiffEqual:
 			// Upon reaching an equality, check for prior redundancies.
 			if countDelete+countInsert > 1 {
@@ -1043,7 +1061,6 @@ func (dmp *DiffMatchPatch) DiffCleanupMerge(diffs []Diff) []Diff {
 			countDelete = 0
 			textDelete = nil
 			textInsert = nil
-			break
 		}
 	}
 
@@ -1051,7 +1068,8 @@ func (dmp *DiffMatchPatch) DiffCleanupMerge(diffs []Diff) []Diff {
 		diffs = diffs[0 : len(diffs)-1] // Remove the dummy entry at the end.
 	}
 
-	// Second pass: look for single edits surrounded on both sides by equalities which can be shifted sideways to eliminate an equality. E.g: A<ins>BA</ins>C -> <ins>AB</ins>AC
+	// Second pass: look for single edits surrounded on both sides by equalities which can be shifted
+	// sideways to eliminate an equality. E.g: A<ins>BA</ins>C -> <ins>AB</ins>AC
 	changes := false
 	pointer = 1
 	// Intentionally ignore the first and last element (don't need checking).
@@ -1069,8 +1087,7 @@ func (dmp *DiffMatchPatch) DiffCleanupMerge(diffs []Diff) []Diff {
 			} else if strings.HasPrefix(diffs[pointer].Text, diffs[pointer+1].Text) {
 				// Shift the edit over the next equality.
 				diffs[pointer-1].Text += diffs[pointer+1].Text
-				diffs[pointer].Text =
-					diffs[pointer].Text[len(diffs[pointer+1].Text):] + diffs[pointer+1].Text
+				diffs[pointer].Text = diffs[pointer].Text[len(diffs[pointer+1].Text):] + diffs[pointer+1].Text
 				diffs = splice(diffs, pointer+1, 1)
 				changes = true
 			}
@@ -1168,7 +1185,7 @@ func (dmp *DiffMatchPatch) DiffPrettyText(diffs []Diff) string {
 
 // DiffText1 computes and returns the source text (all equalities and deletions).
 func (dmp *DiffMatchPatch) DiffText1(diffs []Diff) string {
-	//StringBuilder text = new StringBuilder()
+	// StringBuilder text = new StringBuilder()
 	var text bytes.Buffer
 
 	for _, aDiff := range diffs {
@@ -1215,8 +1232,12 @@ func (dmp *DiffMatchPatch) DiffLevenshtein(diffs []Diff) int {
 	return levenshtein
 }
 
-// DiffToDelta crushes the diff into an encoded string which describes the operations required to transform text1 into text2.
-// E.g. =3\t-2\t+ing  -> Keep 3 chars, delete 2 chars, insert 'ing'. Operations are tab-separated.  Inserted text is escaped using %xx notation.
+// DiffToDelta crushes the diff into an encoded string which describes the operations
+// required to transform text1 into text2.
+//
+//	e.g. =3\t-2\t+ing -> Keep 3 chars, delete 2 chars, insert 'ing'.
+//
+// Operations are tab-separated. Inserted text is escaped using %xx notation.
 func (dmp *DiffMatchPatch) DiffToDelta(diffs []Diff) string {
 	var text bytes.Buffer
 	for _, aDiff := range diffs {
@@ -1225,17 +1246,14 @@ func (dmp *DiffMatchPatch) DiffToDelta(diffs []Diff) string {
 			_, _ = text.WriteString("+")
 			_, _ = text.WriteString(strings.Replace(url.QueryEscape(aDiff.Text), "+", " ", -1))
 			_, _ = text.WriteString("\t")
-			break
 		case DiffDelete:
 			_, _ = text.WriteString("-")
 			_, _ = text.WriteString(strconv.Itoa(utf8.RuneCountInString(aDiff.Text)))
 			_, _ = text.WriteString("\t")
-			break
 		case DiffEqual:
 			_, _ = text.WriteString("=")
 			_, _ = text.WriteString(strconv.Itoa(utf8.RuneCountInString(aDiff.Text)))
 			_, _ = text.WriteString("\t")
-			break
 		}
 	}
 	delta := text.String()
@@ -1247,8 +1265,9 @@ func (dmp *DiffMatchPatch) DiffToDelta(diffs []Diff) string {
 	return delta
 }
 
-// DiffFromDelta given the original text1, and an encoded string which describes the operations required to transform text1 into text2, comAdde the full diff.
-func (dmp *DiffMatchPatch) DiffFromDelta(text1 string, delta string) (diffs []Diff, err error) {
+// DiffFromDelta given the original text1, and an encoded string which describes the operations
+// required to transform text1 into text2, comAdde the full diff.
+func (dmp *DiffMatchPatch) DiffFromDelta(text1, delta string) (diffs []Diff, err error) {
 	i := 0
 	runes := []rune(text1)
 
@@ -1258,7 +1277,8 @@ func (dmp *DiffMatchPatch) DiffFromDelta(text1 string, delta string) (diffs []Di
 			continue
 		}
 
-		// Each token begins with a one character parameter which specifies the operation of this token (delete, insert, equality).
+		// Each token begins with a one character parameter which specifies the operation
+		// of this token (delete, insert, equality).
 		param := token[1:]
 
 		switch op := token[0]; op {
@@ -1297,12 +1317,16 @@ func (dmp *DiffMatchPatch) DiffFromDelta(text1 string, delta string) (diffs []Di
 			}
 		default:
 			// Anything else is an error.
-			return nil, errors.New("Invalid diff operation in DiffFromDelta: " + string(token[0]))
+			return nil, errors.New("invalid diff operation in DiffFromDelta: " + string(token[0]))
 		}
 	}
 
 	if i != len(runes) {
-		return nil, fmt.Errorf("Delta length (%v) is different from source text length (%v)", i, len(text1))
+		return nil, fmt.Errorf(
+			"delta length (%v) is different from source text length (%v)",
+			i,
+			len(text1),
+		)
 	}
 
 	return diffs, nil
@@ -1310,10 +1334,11 @@ func (dmp *DiffMatchPatch) DiffFromDelta(text1 string, delta string) (diffs []Di
 
 // diffLinesToStrings splits two texts into a list of strings. Each string represents one line.
 func (dmp *DiffMatchPatch) diffLinesToStrings(text1, text2 string) (string, string, []string) {
-	// '\x00' is a valid character, but various debuggers don't like it. So we'll insert a junk entry to avoid generating a null character.
+	// '\x00' is a valid character, but various debuggers don't like it.
+	// So we'll insert a junk entry to avoid generating a null character.
 	lineArray := []string{""} // e.g. lineArray[4] == 'Hello\n'
 
-	//Each string has the index of lineArray which it points to
+	// Each string has the index of lineArray which it points to
 	strIndexArray1 := dmp.diffLinesToStringsMunge(text1, &lineArray)
 	strIndexArray2 := dmp.diffLinesToStringsMunge(text2, &lineArray)
 
@@ -1322,7 +1347,9 @@ func (dmp *DiffMatchPatch) diffLinesToStrings(text1, text2 string) (string, stri
 
 // diffLinesToStringsMunge splits a text into an array of strings, and reduces the texts to a []string.
 func (dmp *DiffMatchPatch) diffLinesToStringsMunge(text string, lineArray *[]string) []uint32 {
-	// Walk the text, pulling out a substring for each line. text.split('\n') would would temporarily double our memory footprint. Modifying text would create many large strings to garbage collect.
+	// Walk the text, pulling out a substring for each line. text.split('\n')
+	// would would temporarily double our memory footprint.
+	// Modifying text would create many large strings to garbage collect.
 	lineHash := map[string]int{} // e.g. lineHash['Hello\n'] == 4
 	lineStart := 0
 	lineEnd := -1
