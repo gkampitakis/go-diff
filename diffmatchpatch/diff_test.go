@@ -9,38 +9,22 @@
 package diffmatchpatch
 
 import (
-	"bytes"
 	"fmt"
+	"io"
+	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
-
-	"github.com/stretchr/testify/assert"
 )
 
-func pretty(diffs []Diff) string {
-	var w bytes.Buffer
-
-	for i, diff := range diffs {
-		_, _ = w.WriteString(fmt.Sprintf("%v. ", i))
-
-		switch diff.Type {
-		case DiffInsert:
-			_, _ = w.WriteString("DiffIns")
-		case DiffDelete:
-			_, _ = w.WriteString("DiffDel")
-		case DiffEqual:
-			_, _ = w.WriteString("DiffEql")
-		default:
-			_, _ = w.WriteString("Unknown")
-		}
-
-		_, _ = w.WriteString(fmt.Sprintf(": %v\n", diff.Text))
+func assertEqual(t *testing.T, expected, actual interface{}, msg ...string) {
+	t.Helper()
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("Not equal: \nexpected: %v\nactual: %v\n - %s\n", expected, actual, msg[0])
 	}
-
-	return w.String()
 }
 
 func diffRebuildTexts(diffs []Diff) []string {
@@ -76,17 +60,18 @@ func TestDiffCommonPrefix(t *testing.T) {
 		{"Whole", "1234", "1234xyz", 4},
 	} {
 		actual := dmp.DiffCommonPrefix(tc.Text1, tc.Text2)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
 func BenchmarkDiffCommonPrefix(b *testing.B) {
 	s := "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ"
-
 	dmp := New()
 
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
-		dmp.DiffCommonPrefix(s, s)
+		SinkInt = dmp.DiffCommonPrefix(s, s)
 	}
 }
 
@@ -104,7 +89,7 @@ func TestCommonPrefixLength(t *testing.T) {
 		{"1234", "1234xyz", 4},
 	} {
 		actual := commonPrefixLength([]rune(tc.Text1), []rune(tc.Text2))
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -126,7 +111,7 @@ func TestDiffCommonSuffix(t *testing.T) {
 		{"Whole", "1234", "xyz1234", 4},
 	} {
 		actual := dmp.DiffCommonSuffix(tc.Text1, tc.Text2)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
@@ -134,7 +119,6 @@ var SinkInt int // exported sink var to avoid compiler optimizations in benchmar
 
 func BenchmarkDiffCommonSuffix(b *testing.B) {
 	s := "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ"
-
 	dmp := New()
 
 	b.ResetTimer()
@@ -151,9 +135,10 @@ func BenchmarkCommonLength(b *testing.B) {
 	}{
 		{name: "empty", x: nil, y: []rune{}},
 		{name: "short", x: []rune("AABCC"), y: []rune("AA-CC")},
-		{name: "long",
-			x: []rune(strings.Repeat("A", 1000) + "B" + strings.Repeat("C", 1000)),
-			y: []rune(strings.Repeat("A", 1000) + "-" + strings.Repeat("C", 1000)),
+		{
+			name: "long",
+			x:    []rune(strings.Repeat("A", 1000) + "B" + strings.Repeat("C", 1000)),
+			y:    []rune(strings.Repeat("A", 1000) + "-" + strings.Repeat("C", 1000)),
 		},
 	}
 	b.Run("prefix", func(b *testing.B) {
@@ -191,7 +176,7 @@ func TestCommonSuffixLength(t *testing.T) {
 		{"123", "a3", 1},
 	} {
 		actual := commonSuffixLength([]rune(tc.Text1), []rune(tc.Text2))
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -216,7 +201,7 @@ func TestDiffCommonOverlap(t *testing.T) {
 		{"Unicode", "fi", "\ufb01i", 0},
 	} {
 		actual := dmp.DiffCommonOverlap(tc.Text1, tc.Text2)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
@@ -251,7 +236,7 @@ func TestDiffHalfMatch(t *testing.T) {
 		{"qHilloHelloHew", "xHelloHeHulloy", []string{"qHillo", "w", "x", "Hulloy", "HelloHe"}},
 	} {
 		actual := dmp.DiffHalfMatch(tc.Text1, tc.Text2)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
 	dmp.DiffTimeout = 0
@@ -261,20 +246,25 @@ func TestDiffHalfMatch(t *testing.T) {
 		{"qHilloHelloHew", "xHelloHeHulloy", nil},
 	} {
 		actual := dmp.DiffHalfMatch(tc.Text1, tc.Text2)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
-func BenchmarkDiffHalfMatch(b *testing.B) {
-	s1, s2 := speedtestTexts()
+var SinkSliceString []string
 
+func BenchmarkDiffHalfMatch(b *testing.B) {
+	var r []string
+
+	s1, s2 := speedtestTexts()
 	dmp := New()
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		dmp.DiffHalfMatch(s1, s2)
+		r = dmp.DiffHalfMatch(s1, s2)
 	}
+
+	SinkSliceString = r
 }
 
 func TestDiffBisectSplit(t *testing.T) {
@@ -292,7 +282,7 @@ func TestDiffBisectSplit(t *testing.T) {
 			[]rune(tc.Text2), 7, 6, time.Now().Add(time.Hour))
 
 		for _, d := range diffs {
-			assert.True(t, utf8.ValidString(d.Text))
+			assertEqual(t, true, utf8.ValidString(d.Text))
 		}
 
 		// TODO define the expected outcome
@@ -318,9 +308,9 @@ func TestDiffLinesToChars(t *testing.T) {
 		{"alpha\nbeta\nalpha", "", "\u0001\u0002\u0003", "", []string{"", "alpha\n", "beta\n", "alpha"}},
 	} {
 		actualChars1, actualChars2, actualLines := dmp.DiffLinesToChars(tc.Text1, tc.Text2)
-		assert.Equal(t, tc.ExpectedChars1, actualChars1, fmt.Sprintf("Test case #%d, %#v", i, tc))
-		assert.Equal(t, tc.ExpectedChars2, actualChars2, fmt.Sprintf("Test case #%d, %#v", i, tc))
-		assert.Equal(t, tc.ExpectedLines, actualLines, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.ExpectedChars1, actualChars1, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.ExpectedChars2, actualChars2, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.ExpectedLines, actualLines, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
 	// More than 256 to reveal any 8-bit limitations.
@@ -335,19 +325,18 @@ func TestDiffLinesToChars(t *testing.T) {
 	}
 	lines := strings.Join(lineList, "")
 	chars := string(charList)
-	assert.Equal(t, n, utf8.RuneCountInString(chars))
+	assertEqual(t, n, utf8.RuneCountInString(chars))
 
 	actualChars1, actualChars2, actualLines := dmp.DiffLinesToChars(lines, "")
-	assert.Equal(t, chars, actualChars1)
-	assert.Equal(t, "", actualChars2)
-	assert.Equal(t, lineList, actualLines)
+	assertEqual(t, chars, actualChars1)
+	assertEqual(t, "", actualChars2)
+	assertEqual(t, lineList, actualLines)
 }
 
 func TestDiffCharsToLines(t *testing.T) {
 	type TestCase struct {
-		Diffs []Diff
-		Lines []string
-
+		Diffs    []Diff
+		Lines    []string
 		Expected []Diff
 	}
 
@@ -368,7 +357,7 @@ func TestDiffCharsToLines(t *testing.T) {
 		},
 	} {
 		actual := dmp.DiffCharsToLines(tc.Diffs, tc.Lines)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
 	// More than 256 to reveal any 8-bit limitations.
@@ -381,18 +370,16 @@ func TestDiffCharsToLines(t *testing.T) {
 		lineList = append(lineList, strconv.Itoa(x)+"\n")
 		charList = append(charList, rune(x))
 	}
-	assert.Equal(t, n, len(charList))
+	assertEqual(t, n, len(charList))
 
-	actual := dmp.DiffCharsToLines([]Diff{Diff{DiffDelete, string(charList)}}, lineList)
-	assert.Equal(t, []Diff{Diff{DiffDelete, strings.Join(lineList, "")}}, actual)
+	actual := dmp.DiffCharsToLines([]Diff{{DiffDelete, string(charList)}}, lineList)
+	assertEqual(t, []Diff{{DiffDelete, strings.Join(lineList, "")}}, actual)
 }
 
 func TestDiffCleanupMerge(t *testing.T) {
 	type TestCase struct {
-		Name string
-
-		Diffs []Diff
-
+		Name     string
+		Diffs    []Diff
 		Expected []Diff
 	}
 
@@ -406,76 +393,74 @@ func TestDiffCleanupMerge(t *testing.T) {
 		},
 		{
 			"No Diff case",
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffDelete, "b"}, Diff{DiffInsert, "c"}},
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffDelete, "b"}, Diff{DiffInsert, "c"}},
+			[]Diff{{DiffEqual, "a"}, {DiffDelete, "b"}, {DiffInsert, "c"}},
+			[]Diff{{DiffEqual, "a"}, {DiffDelete, "b"}, {DiffInsert, "c"}},
 		},
 		{
 			"Merge equalities",
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffEqual, "b"}, Diff{DiffEqual, "c"}},
-			[]Diff{Diff{DiffEqual, "abc"}},
+			[]Diff{{DiffEqual, "a"}, {DiffEqual, "b"}, {DiffEqual, "c"}},
+			[]Diff{{DiffEqual, "abc"}},
 		},
 		{
 			"Merge deletions",
-			[]Diff{Diff{DiffDelete, "a"}, Diff{DiffDelete, "b"}, Diff{DiffDelete, "c"}},
-			[]Diff{Diff{DiffDelete, "abc"}},
+			[]Diff{{DiffDelete, "a"}, {DiffDelete, "b"}, {DiffDelete, "c"}},
+			[]Diff{{DiffDelete, "abc"}},
 		},
 		{
 			"Merge insertions",
-			[]Diff{Diff{DiffInsert, "a"}, Diff{DiffInsert, "b"}, Diff{DiffInsert, "c"}},
-			[]Diff{Diff{DiffInsert, "abc"}},
+			[]Diff{{DiffInsert, "a"}, {DiffInsert, "b"}, {DiffInsert, "c"}},
+			[]Diff{{DiffInsert, "abc"}},
 		},
 		{
 			"Merge interweave",
-			[]Diff{Diff{DiffDelete, "a"}, Diff{DiffInsert, "b"}, Diff{DiffDelete, "c"}, Diff{DiffInsert, "d"}, Diff{DiffEqual, "e"}, Diff{DiffEqual, "f"}},
-			[]Diff{Diff{DiffDelete, "ac"}, Diff{DiffInsert, "bd"}, Diff{DiffEqual, "ef"}},
+			[]Diff{{DiffDelete, "a"}, {DiffInsert, "b"}, {DiffDelete, "c"}, {DiffInsert, "d"}, {DiffEqual, "e"}, {DiffEqual, "f"}},
+			[]Diff{{DiffDelete, "ac"}, {DiffInsert, "bd"}, {DiffEqual, "ef"}},
 		},
 		{
 			"Prefix and suffix detection",
-			[]Diff{Diff{DiffDelete, "a"}, Diff{DiffInsert, "abc"}, Diff{DiffDelete, "dc"}},
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffDelete, "d"}, Diff{DiffInsert, "b"}, Diff{DiffEqual, "c"}},
+			[]Diff{{DiffDelete, "a"}, {DiffInsert, "abc"}, {DiffDelete, "dc"}},
+			[]Diff{{DiffEqual, "a"}, {DiffDelete, "d"}, {DiffInsert, "b"}, {DiffEqual, "c"}},
 		},
 		{
 			"Prefix and suffix detection with equalities",
-			[]Diff{Diff{DiffEqual, "x"}, Diff{DiffDelete, "a"}, Diff{DiffInsert, "abc"}, Diff{DiffDelete, "dc"}, Diff{DiffEqual, "y"}},
-			[]Diff{Diff{DiffEqual, "xa"}, Diff{DiffDelete, "d"}, Diff{DiffInsert, "b"}, Diff{DiffEqual, "cy"}},
+			[]Diff{{DiffEqual, "x"}, {DiffDelete, "a"}, {DiffInsert, "abc"}, {DiffDelete, "dc"}, {DiffEqual, "y"}},
+			[]Diff{{DiffEqual, "xa"}, {DiffDelete, "d"}, {DiffInsert, "b"}, {DiffEqual, "cy"}},
 		},
 		{
 			"Same test as above but with unicode (\u0101 will appear in diffs with at least 257 unique lines)",
-			[]Diff{Diff{DiffEqual, "x"}, Diff{DiffDelete, "\u0101"}, Diff{DiffInsert, "\u0101bc"}, Diff{DiffDelete, "dc"}, Diff{DiffEqual, "y"}},
-			[]Diff{Diff{DiffEqual, "x\u0101"}, Diff{DiffDelete, "d"}, Diff{DiffInsert, "b"}, Diff{DiffEqual, "cy"}},
+			[]Diff{{DiffEqual, "x"}, {DiffDelete, "\u0101"}, {DiffInsert, "\u0101bc"}, {DiffDelete, "dc"}, {DiffEqual, "y"}},
+			[]Diff{{DiffEqual, "x\u0101"}, {DiffDelete, "d"}, {DiffInsert, "b"}, {DiffEqual, "cy"}},
 		},
 		{
 			"Slide edit left",
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffInsert, "ba"}, Diff{DiffEqual, "c"}},
-			[]Diff{Diff{DiffInsert, "ab"}, Diff{DiffEqual, "ac"}},
+			[]Diff{{DiffEqual, "a"}, {DiffInsert, "ba"}, {DiffEqual, "c"}},
+			[]Diff{{DiffInsert, "ab"}, {DiffEqual, "ac"}},
 		},
 		{
 			"Slide edit right",
-			[]Diff{Diff{DiffEqual, "c"}, Diff{DiffInsert, "ab"}, Diff{DiffEqual, "a"}},
-			[]Diff{Diff{DiffEqual, "ca"}, Diff{DiffInsert, "ba"}},
+			[]Diff{{DiffEqual, "c"}, {DiffInsert, "ab"}, {DiffEqual, "a"}},
+			[]Diff{{DiffEqual, "ca"}, {DiffInsert, "ba"}},
 		},
 		{
 			"Slide edit left recursive",
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffDelete, "b"}, Diff{DiffEqual, "c"}, Diff{DiffDelete, "ac"}, Diff{DiffEqual, "x"}},
-			[]Diff{Diff{DiffDelete, "abc"}, Diff{DiffEqual, "acx"}},
+			[]Diff{{DiffEqual, "a"}, {DiffDelete, "b"}, {DiffEqual, "c"}, {DiffDelete, "ac"}, {DiffEqual, "x"}},
+			[]Diff{{DiffDelete, "abc"}, {DiffEqual, "acx"}},
 		},
 		{
 			"Slide edit right recursive",
-			[]Diff{Diff{DiffEqual, "x"}, Diff{DiffDelete, "ca"}, Diff{DiffEqual, "c"}, Diff{DiffDelete, "b"}, Diff{DiffEqual, "a"}},
-			[]Diff{Diff{DiffEqual, "xca"}, Diff{DiffDelete, "cba"}},
+			[]Diff{{DiffEqual, "x"}, {DiffDelete, "ca"}, {DiffEqual, "c"}, {DiffDelete, "b"}, {DiffEqual, "a"}},
+			[]Diff{{DiffEqual, "xca"}, {DiffDelete, "cba"}},
 		},
 	} {
 		actual := dmp.DiffCleanupMerge(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
 func TestDiffCleanupSemanticLossless(t *testing.T) {
 	type TestCase struct {
-		Name string
-
-		Diffs []Diff
-
+		Name     string
+		Diffs    []Diff
 		Expected []Diff
 	}
 
@@ -490,130 +475,128 @@ func TestDiffCleanupSemanticLossless(t *testing.T) {
 		{
 			"Blank lines",
 			[]Diff{
-				Diff{DiffEqual, "AAA\r\n\r\nBBB"},
-				Diff{DiffInsert, "\r\nDDD\r\n\r\nBBB"},
-				Diff{DiffEqual, "\r\nEEE"},
+				{DiffEqual, "AAA\r\n\r\nBBB"},
+				{DiffInsert, "\r\nDDD\r\n\r\nBBB"},
+				{DiffEqual, "\r\nEEE"},
 			},
 			[]Diff{
-				Diff{DiffEqual, "AAA\r\n\r\n"},
-				Diff{DiffInsert, "BBB\r\nDDD\r\n\r\n"},
-				Diff{DiffEqual, "BBB\r\nEEE"},
+				{DiffEqual, "AAA\r\n\r\n"},
+				{DiffInsert, "BBB\r\nDDD\r\n\r\n"},
+				{DiffEqual, "BBB\r\nEEE"},
 			},
 		},
 		{
 			"Line boundaries",
 			[]Diff{
-				Diff{DiffEqual, "AAA\r\nBBB"},
-				Diff{DiffInsert, " DDD\r\nBBB"},
-				Diff{DiffEqual, " EEE"},
+				{DiffEqual, "AAA\r\nBBB"},
+				{DiffInsert, " DDD\r\nBBB"},
+				{DiffEqual, " EEE"},
 			},
 			[]Diff{
-				Diff{DiffEqual, "AAA\r\n"},
-				Diff{DiffInsert, "BBB DDD\r\n"},
-				Diff{DiffEqual, "BBB EEE"},
+				{DiffEqual, "AAA\r\n"},
+				{DiffInsert, "BBB DDD\r\n"},
+				{DiffEqual, "BBB EEE"},
 			},
 		},
 		{
 			"Word boundaries",
 			[]Diff{
-				Diff{DiffEqual, "The c"},
-				Diff{DiffInsert, "ow and the c"},
-				Diff{DiffEqual, "at."},
+				{DiffEqual, "The c"},
+				{DiffInsert, "ow and the c"},
+				{DiffEqual, "at."},
 			},
 			[]Diff{
-				Diff{DiffEqual, "The "},
-				Diff{DiffInsert, "cow and the "},
-				Diff{DiffEqual, "cat."},
+				{DiffEqual, "The "},
+				{DiffInsert, "cow and the "},
+				{DiffEqual, "cat."},
 			},
 		},
 		{
 			"Alphanumeric boundaries",
 			[]Diff{
-				Diff{DiffEqual, "The-c"},
-				Diff{DiffInsert, "ow-and-the-c"},
-				Diff{DiffEqual, "at."},
+				{DiffEqual, "The-c"},
+				{DiffInsert, "ow-and-the-c"},
+				{DiffEqual, "at."},
 			},
 			[]Diff{
-				Diff{DiffEqual, "The-"},
-				Diff{DiffInsert, "cow-and-the-"},
-				Diff{DiffEqual, "cat."},
+				{DiffEqual, "The-"},
+				{DiffInsert, "cow-and-the-"},
+				{DiffEqual, "cat."},
 			},
 		},
 		{
 			"Hitting the start",
 			[]Diff{
-				Diff{DiffEqual, "a"},
-				Diff{DiffDelete, "a"},
-				Diff{DiffEqual, "ax"},
+				{DiffEqual, "a"},
+				{DiffDelete, "a"},
+				{DiffEqual, "ax"},
 			},
 			[]Diff{
-				Diff{DiffDelete, "a"},
-				Diff{DiffEqual, "aax"},
+				{DiffDelete, "a"},
+				{DiffEqual, "aax"},
 			},
 		},
 		{
 			"Hitting the end",
 			[]Diff{
-				Diff{DiffEqual, "xa"},
-				Diff{DiffDelete, "a"},
-				Diff{DiffEqual, "a"},
+				{DiffEqual, "xa"},
+				{DiffDelete, "a"},
+				{DiffEqual, "a"},
 			},
 			[]Diff{
-				Diff{DiffEqual, "xaa"},
-				Diff{DiffDelete, "a"},
+				{DiffEqual, "xaa"},
+				{DiffDelete, "a"},
 			},
 		},
 		{
 			"Sentence boundaries",
 			[]Diff{
-				Diff{DiffEqual, "The xxx. The "},
-				Diff{DiffInsert, "zzz. The "},
-				Diff{DiffEqual, "yyy."},
+				{DiffEqual, "The xxx. The "},
+				{DiffInsert, "zzz. The "},
+				{DiffEqual, "yyy."},
 			},
 			[]Diff{
-				Diff{DiffEqual, "The xxx."},
-				Diff{DiffInsert, " The zzz."},
-				Diff{DiffEqual, " The yyy."},
+				{DiffEqual, "The xxx."},
+				{DiffInsert, " The zzz."},
+				{DiffEqual, " The yyy."},
 			},
 		},
 		{
 			"UTF-8 strings",
 			[]Diff{
-				Diff{DiffEqual, "The ♕. The "},
-				Diff{DiffInsert, "♔. The "},
-				Diff{DiffEqual, "♖."},
+				{DiffEqual, "The ♕. The "},
+				{DiffInsert, "♔. The "},
+				{DiffEqual, "♖."},
 			},
 			[]Diff{
-				Diff{DiffEqual, "The ♕."},
-				Diff{DiffInsert, " The ♔."},
-				Diff{DiffEqual, " The ♖."},
+				{DiffEqual, "The ♕."},
+				{DiffInsert, " The ♔."},
+				{DiffEqual, " The ♖."},
 			},
 		},
 		{
 			"Rune boundaries",
 			[]Diff{
-				Diff{DiffEqual, "♕♕"},
-				Diff{DiffInsert, "♔♔"},
-				Diff{DiffEqual, "♖♖"},
+				{DiffEqual, "♕♕"},
+				{DiffInsert, "♔♔"},
+				{DiffEqual, "♖♖"},
 			},
 			[]Diff{
-				Diff{DiffEqual, "♕♕"},
-				Diff{DiffInsert, "♔♔"},
-				Diff{DiffEqual, "♖♖"},
+				{DiffEqual, "♕♕"},
+				{DiffInsert, "♔♔"},
+				{DiffEqual, "♖♖"},
 			},
 		},
 	} {
 		actual := dmp.DiffCleanupSemanticLossless(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
 func TestDiffCleanupSemantic(t *testing.T) {
 	type TestCase struct {
-		Name string
-
-		Diffs []Diff
-
+		Name     string
+		Diffs    []Diff
 		Expected []Diff
 	}
 
@@ -860,22 +843,26 @@ func TestDiffCleanupSemantic(t *testing.T) {
 		},
 	} {
 		actual := dmp.DiffCleanupSemantic(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
+var SinkSliceDiff []Diff
+
 func BenchmarkDiffCleanupSemantic(b *testing.B) {
+	var r []Diff
+
 	s1, s2 := speedtestTexts()
-
 	dmp := New()
-
 	diffs := dmp.DiffMain(s1, s2, false)
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		dmp.DiffCleanupSemantic(diffs)
+		r = dmp.DiffCleanupSemantic(diffs)
 	}
+
+	SinkSliceDiff = r
 }
 
 func TestDiffCleanupEfficiency(t *testing.T) {
@@ -899,66 +886,66 @@ func TestDiffCleanupEfficiency(t *testing.T) {
 		{
 			"No elimination",
 			[]Diff{
-				Diff{DiffDelete, "ab"},
-				Diff{DiffInsert, "12"},
-				Diff{DiffEqual, "wxyz"},
-				Diff{DiffDelete, "cd"},
-				Diff{DiffInsert, "34"},
+				{DiffDelete, "ab"},
+				{DiffInsert, "12"},
+				{DiffEqual, "wxyz"},
+				{DiffDelete, "cd"},
+				{DiffInsert, "34"},
 			},
 			[]Diff{
-				Diff{DiffDelete, "ab"},
-				Diff{DiffInsert, "12"},
-				Diff{DiffEqual, "wxyz"},
-				Diff{DiffDelete, "cd"},
-				Diff{DiffInsert, "34"},
+				{DiffDelete, "ab"},
+				{DiffInsert, "12"},
+				{DiffEqual, "wxyz"},
+				{DiffDelete, "cd"},
+				{DiffInsert, "34"},
 			},
 		},
 		{
 			"Four-edit elimination",
 			[]Diff{
-				Diff{DiffDelete, "ab"},
-				Diff{DiffInsert, "12"},
-				Diff{DiffEqual, "xyz"},
-				Diff{DiffDelete, "cd"},
-				Diff{DiffInsert, "34"},
+				{DiffDelete, "ab"},
+				{DiffInsert, "12"},
+				{DiffEqual, "xyz"},
+				{DiffDelete, "cd"},
+				{DiffInsert, "34"},
 			},
 			[]Diff{
-				Diff{DiffDelete, "abxyzcd"},
-				Diff{DiffInsert, "12xyz34"},
+				{DiffDelete, "abxyzcd"},
+				{DiffInsert, "12xyz34"},
 			},
 		},
 		{
 			"Three-edit elimination",
 			[]Diff{
-				Diff{DiffInsert, "12"},
-				Diff{DiffEqual, "x"},
-				Diff{DiffDelete, "cd"},
-				Diff{DiffInsert, "34"},
+				{DiffInsert, "12"},
+				{DiffEqual, "x"},
+				{DiffDelete, "cd"},
+				{DiffInsert, "34"},
 			},
 			[]Diff{
-				Diff{DiffDelete, "xcd"},
-				Diff{DiffInsert, "12x34"},
+				{DiffDelete, "xcd"},
+				{DiffInsert, "12x34"},
 			},
 		},
 		{
 			"Backpass elimination",
 			[]Diff{
-				Diff{DiffDelete, "ab"},
-				Diff{DiffInsert, "12"},
-				Diff{DiffEqual, "xy"},
-				Diff{DiffInsert, "34"},
-				Diff{DiffEqual, "z"},
-				Diff{DiffDelete, "cd"},
-				Diff{DiffInsert, "56"},
+				{DiffDelete, "ab"},
+				{DiffInsert, "12"},
+				{DiffEqual, "xy"},
+				{DiffInsert, "34"},
+				{DiffEqual, "z"},
+				{DiffDelete, "cd"},
+				{DiffInsert, "56"},
 			},
 			[]Diff{
-				Diff{DiffDelete, "abxyzcd"},
-				Diff{DiffInsert, "12xy34z56"},
+				{DiffDelete, "abxyzcd"},
+				{DiffInsert, "12xy34z56"},
 			},
 		},
 	} {
 		actual := dmp.DiffCleanupEfficiency(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	dmp.DiffEditCost = 5
@@ -967,20 +954,20 @@ func TestDiffCleanupEfficiency(t *testing.T) {
 		{
 			"High cost elimination",
 			[]Diff{
-				Diff{DiffDelete, "ab"},
-				Diff{DiffInsert, "12"},
-				Diff{DiffEqual, "wxyz"},
-				Diff{DiffDelete, "cd"},
-				Diff{DiffInsert, "34"},
+				{DiffDelete, "ab"},
+				{DiffInsert, "12"},
+				{DiffEqual, "wxyz"},
+				{DiffDelete, "cd"},
+				{DiffInsert, "34"},
 			},
 			[]Diff{
-				Diff{DiffDelete, "abwxyzcd"},
-				Diff{DiffInsert, "12wxyz34"},
+				{DiffDelete, "abwxyzcd"},
+				{DiffInsert, "12wxyz34"},
 			},
 		},
 	} {
 		actual := dmp.DiffCleanupEfficiency(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
@@ -1000,12 +987,12 @@ func TestDiffPrettyHtml(t *testing.T) {
 				{DiffDelete, "<B>b</B>"},
 				{DiffInsert, "c&d"},
 			},
-
-			Expected: "<span>a&para;<br></span><del style=\"background:#ffe6e6;\">&lt;B&gt;b&lt;/B&gt;</del><ins style=\"background:#e6ffe6;\">c&amp;d</ins>",
+			Expected: "<span>a&para;<br></span><del style=\"background:#ffe6e6;\">&lt;B&gt;b&lt;" +
+				"/B&gt;</del><ins style=\"background:#e6ffe6;\">c&amp;d</ins>",
 		},
 	} {
 		actual := dmp.DiffPrettyHtml(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -1030,7 +1017,7 @@ func TestDiffPrettyText(t *testing.T) {
 		},
 	} {
 		actual := dmp.DiffPrettyText(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -1061,10 +1048,10 @@ func TestDiffText(t *testing.T) {
 		},
 	} {
 		actualText1 := dmp.DiffText1(tc.Diffs)
-		assert.Equal(t, tc.ExpectedText1, actualText1, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.ExpectedText1, actualText1, fmt.Sprintf("Test case #%d, %#v", i, tc))
 
 		actualText2 := dmp.DiffText2(tc.Diffs)
-		assert.Equal(t, tc.ExpectedText2, actualText2, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.ExpectedText2, actualText2, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -1081,80 +1068,126 @@ func TestDiffDelta(t *testing.T) {
 	dmp := New()
 
 	for i, tc := range []TestCase{
-		{"Delta shorter than text", "jumps over the lazyx", "=4\t-1\t+ed\t=6\t-3\t+a\t=5\t+old dog", "Delta length (19) is different from source text length (20)"},
-		{"Delta longer than text", "umps over the lazy", "=4\t-1\t+ed\t=6\t-3\t+a\t=5\t+old dog", "Delta length (19) is different from source text length (18)"},
-		{"Invalid URL escaping", "", "+%c3%xy", "invalid URL escape \"%xy\""},
-		{"Invalid UTF-8 sequence", "", "+%c3xy", "invalid UTF-8 token: \"\\xc3xy\""},
-		{"Invalid diff operation", "", "a", "Invalid diff operation in DiffFromDelta: a"},
-		{"Invalid diff syntax", "", "-", "strconv.ParseInt: parsing \"\": invalid syntax"},
-		{"Negative number in delta", "", "--1", "Negative number in DiffFromDelta: -1"},
-		{"Empty case", "", "", ""},
+		{
+			"Delta shorter than text",
+			"jumps over the lazyx",
+			"=4\t-1\t+ed\t=6\t-3\t+a\t=5\t+old dog",
+			"delta length (19) is different from source text length (20)",
+		},
+		{
+			"Delta longer than text",
+			"umps over the lazy",
+			"=4\t-1\t+ed\t=6\t-3\t+a\t=5\t+old dog",
+			"delta length (19) is different from source text length (18)",
+		},
+		{
+			"Invalid URL escaping",
+			"",
+			"+%c3%xy",
+			"invalid URL escape \"%xy\"",
+		},
+		{
+			"Invalid UTF-8 sequence",
+			"",
+			"+%c3xy",
+			"invalid UTF-8 token: \"\\xc3xy\"",
+		},
+		{
+			"Invalid diff operation",
+			"",
+			"a",
+			"invalid diff operation in DiffFromDelta: a",
+		},
+		{
+			"Invalid diff syntax",
+			"",
+			"-",
+			"strconv.ParseInt: parsing \"\": invalid syntax",
+		},
+		{
+			"Negative number in delta",
+			"",
+			"--1",
+			"Negative number in DiffFromDelta: -1",
+		},
+		{
+			"Empty case",
+			"",
+			"",
+			"",
+		},
 	} {
 		diffs, err := dmp.DiffFromDelta(tc.Text, tc.Delta)
 		msg := fmt.Sprintf("Test case #%d, %s", i, tc.Name)
 		if tc.ErrorMessagePrefix == "" {
-			assert.Nil(t, err, msg)
-			assert.Nil(t, diffs, msg)
+			assertEqual(t, nil, err, msg)
+			assertEqual(t, 0, len(diffs), msg)
 		} else {
 			e := err.Error()
 			if strings.HasPrefix(e, tc.ErrorMessagePrefix) {
 				e = tc.ErrorMessagePrefix
 			}
-			assert.Nil(t, diffs, msg)
-			assert.Equal(t, tc.ErrorMessagePrefix, e, msg)
+			assertEqual(t, 0, len(diffs), msg)
+			assertEqual(t, tc.ErrorMessagePrefix, e, msg)
 		}
 	}
 
 	// Convert a diff into delta string.
 	diffs := []Diff{
-		Diff{DiffEqual, "jump"},
-		Diff{DiffDelete, "s"},
-		Diff{DiffInsert, "ed"},
-		Diff{DiffEqual, " over "},
-		Diff{DiffDelete, "the"},
-		Diff{DiffInsert, "a"},
-		Diff{DiffEqual, " lazy"},
-		Diff{DiffInsert, "old dog"},
+		{DiffEqual, "jump"},
+		{DiffDelete, "s"},
+		{DiffInsert, "ed"},
+		{DiffEqual, " over "},
+		{DiffDelete, "the"},
+		{DiffInsert, "a"},
+		{DiffEqual, " lazy"},
+		{DiffInsert, "old dog"},
 	}
 	text1 := dmp.DiffText1(diffs)
-	assert.Equal(t, "jumps over the lazy", text1)
+	assertEqual(t, "jumps over the lazy", text1)
 
 	delta := dmp.DiffToDelta(diffs)
-	assert.Equal(t, "=4\t-1\t+ed\t=6\t-3\t+a\t=5\t+old dog", delta)
+	assertEqual(t, "=4\t-1\t+ed\t=6\t-3\t+a\t=5\t+old dog", delta)
 
 	// Convert delta string into a diff.
 	deltaDiffs, err := dmp.DiffFromDelta(text1, delta)
-	assert.Equal(t, diffs, deltaDiffs)
+	assertEqual(t, diffs, deltaDiffs)
+	assertEqual(t, nil, err)
 
 	// Test deltas with special characters.
 	diffs = []Diff{
-		Diff{DiffEqual, "\u0680 \x00 \t %"},
-		Diff{DiffDelete, "\u0681 \x01 \n ^"},
-		Diff{DiffInsert, "\u0682 \x02 \\ |"},
+		{DiffEqual, "\u0680 \x00 \t %"},
+		{DiffDelete, "\u0681 \x01 \n ^"},
+		{DiffInsert, "\u0682 \x02 \\ |"},
 	}
 	text1 = dmp.DiffText1(diffs)
-	assert.Equal(t, "\u0680 \x00 \t %\u0681 \x01 \n ^", text1)
+	assertEqual(t, "\u0680 \x00 \t %\u0681 \x01 \n ^", text1)
 
 	// Lowercase, due to UrlEncode uses lower.
 	delta = dmp.DiffToDelta(diffs)
-	assert.Equal(t, "=7\t-7\t+%DA%82 %02 %5C %7C", delta)
+	assertEqual(t, "=7\t-7\t+%DA%82 %02 %5C %7C", delta)
 
 	deltaDiffs, err = dmp.DiffFromDelta(text1, delta)
-	assert.Equal(t, diffs, deltaDiffs)
-	assert.Nil(t, err)
+	assertEqual(t, diffs, deltaDiffs)
+	assertEqual(t, nil, err)
 
 	// Verify pool of unchanged characters.
 	diffs = []Diff{
-		Diff{DiffInsert, "A-Z a-z 0-9 - _ . ! ~ * ' ( ) ; / ? : @ & = + $ , # "},
+		{DiffInsert, "A-Z a-z 0-9 - _ . ! ~ * ' ( ) ; / ? : @ & = + $ , # "},
 	}
 
 	delta = dmp.DiffToDelta(diffs)
-	assert.Equal(t, "+A-Z a-z 0-9 - _ . ! ~ * ' ( ) ; / ? : @ & = + $ , # ", delta, "Unchanged characters.")
+	assertEqual(
+		t,
+		"+A-Z a-z 0-9 - _ . ! ~ * ' ( ) ; / ? : @ & = + $ , # ",
+		delta,
+		"Unchanged characters.",
+	)
 
 	// Convert delta string into a diff.
 	deltaDiffs, err = dmp.DiffFromDelta("", delta)
-	assert.Equal(t, diffs, deltaDiffs)
-	assert.Nil(t, err)
+	assertEqual(t, diffs, deltaDiffs)
+	assertEqual(t, nil, err)
 }
 
 func TestDiffXIndex(t *testing.T) {
@@ -1174,7 +1207,7 @@ func TestDiffXIndex(t *testing.T) {
 		{"Translation on deletion", []Diff{{DiffEqual, "a"}, {DiffDelete, "1234"}, {DiffEqual, "xyz"}}, 3, 1},
 	} {
 		actual := dmp.DiffXIndex(tc.Diffs, tc.Location)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
@@ -1195,7 +1228,7 @@ func TestDiffLevenshtein(t *testing.T) {
 		{"Levenshtein with middle equality", []Diff{{DiffDelete, "абв"}, {DiffEqual, "эюя"}, {DiffInsert, "1234"}}, 7},
 	} {
 		actual := dmp.DiffLevenshtein(tc.Diffs)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
@@ -1225,7 +1258,7 @@ func TestDiffBisect(t *testing.T) {
 		},
 		{
 			Name: "Negative deadlines count as having infinite time",
-			Time: time.Date(0001, time.January, 01, 00, 00, 00, 00, time.UTC),
+			Time: time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC),
 
 			Expected: []Diff{
 				{DiffDelete, "c"},
@@ -1246,12 +1279,12 @@ func TestDiffBisect(t *testing.T) {
 		},
 	} {
 		actual := dmp.DiffBisect("cat", "map", tc.Time)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	// Test for invalid UTF-8 sequences
-	assert.Equal(t, []Diff{
-		Diff{DiffEqual, "��"},
+	assertEqual(t, []Diff{
+		{DiffEqual, "��"},
 	}, dmp.DiffBisect("\xe0\xe5", "\xe0\xe5", time.Now().Add(time.Minute)))
 }
 
@@ -1275,31 +1308,31 @@ func TestDiffMain(t *testing.T) {
 		{
 			"abc",
 			"abc",
-			[]Diff{Diff{DiffEqual, "abc"}},
+			[]Diff{{DiffEqual, "abc"}},
 		},
 		{
 			"abc",
 			"ab123c",
-			[]Diff{Diff{DiffEqual, "ab"}, Diff{DiffInsert, "123"}, Diff{DiffEqual, "c"}},
+			[]Diff{{DiffEqual, "ab"}, {DiffInsert, "123"}, {DiffEqual, "c"}},
 		},
 		{
 			"a123bc",
 			"abc",
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffDelete, "123"}, Diff{DiffEqual, "bc"}},
+			[]Diff{{DiffEqual, "a"}, {DiffDelete, "123"}, {DiffEqual, "bc"}},
 		},
 		{
 			"abc",
 			"a123b456c",
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffInsert, "123"}, Diff{DiffEqual, "b"}, Diff{DiffInsert, "456"}, Diff{DiffEqual, "c"}},
+			[]Diff{{DiffEqual, "a"}, {DiffInsert, "123"}, {DiffEqual, "b"}, {DiffInsert, "456"}, {DiffEqual, "c"}},
 		},
 		{
 			"a123b456c",
 			"abc",
-			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffDelete, "123"}, Diff{DiffEqual, "b"}, Diff{DiffDelete, "456"}, Diff{DiffEqual, "c"}},
+			[]Diff{{DiffEqual, "a"}, {DiffDelete, "123"}, {DiffEqual, "b"}, {DiffDelete, "456"}, {DiffEqual, "c"}},
 		},
 	} {
 		actual := dmp.DiffMain(tc.Text1, tc.Text2, false)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
 	// Perform a real diff and switch off the timeout.
@@ -1309,84 +1342,85 @@ func TestDiffMain(t *testing.T) {
 		{
 			"a",
 			"b",
-			[]Diff{Diff{DiffDelete, "a"}, Diff{DiffInsert, "b"}},
+			[]Diff{{DiffDelete, "a"}, {DiffInsert, "b"}},
 		},
 		{
 			"Apples are a fruit.",
 			"Bananas are also fruit.",
 			[]Diff{
-				Diff{DiffDelete, "Apple"},
-				Diff{DiffInsert, "Banana"},
-				Diff{DiffEqual, "s are a"},
-				Diff{DiffInsert, "lso"},
-				Diff{DiffEqual, " fruit."},
+				{DiffDelete, "Apple"},
+				{DiffInsert, "Banana"},
+				{DiffEqual, "s are a"},
+				{DiffInsert, "lso"},
+				{DiffEqual, " fruit."},
 			},
 		},
 		{
 			"ax\t",
 			"\u0680x\u0000",
 			[]Diff{
-				Diff{DiffDelete, "a"},
-				Diff{DiffInsert, "\u0680"},
-				Diff{DiffEqual, "x"},
-				Diff{DiffDelete, "\t"},
-				Diff{DiffInsert, "\u0000"},
+				{DiffDelete, "a"},
+				{DiffInsert, "\u0680"},
+				{DiffEqual, "x"},
+				{DiffDelete, "\t"},
+				{DiffInsert, "\u0000"},
 			},
 		},
 		{
 			"1ayb2",
 			"abxab",
 			[]Diff{
-				Diff{DiffDelete, "1"},
-				Diff{DiffEqual, "a"},
-				Diff{DiffDelete, "y"},
-				Diff{DiffEqual, "b"},
-				Diff{DiffDelete, "2"},
-				Diff{DiffInsert, "xab"},
+				{DiffDelete, "1"},
+				{DiffEqual, "a"},
+				{DiffDelete, "y"},
+				{DiffEqual, "b"},
+				{DiffDelete, "2"},
+				{DiffInsert, "xab"},
 			},
 		},
 		{
 			"abcy",
 			"xaxcxabc",
 			[]Diff{
-				Diff{DiffInsert, "xaxcx"},
-				Diff{DiffEqual, "abc"}, Diff{DiffDelete, "y"},
+				{DiffInsert, "xaxcx"},
+				{DiffEqual, "abc"},
+				{DiffDelete, "y"},
 			},
 		},
 		{
 			"ABCDa=bcd=efghijklmnopqrsEFGHIJKLMNOefg",
 			"a-bcd-efghijklmnopqrs",
 			[]Diff{
-				Diff{DiffDelete, "ABCD"},
-				Diff{DiffEqual, "a"},
-				Diff{DiffDelete, "="},
-				Diff{DiffInsert, "-"},
-				Diff{DiffEqual, "bcd"},
-				Diff{DiffDelete, "="},
-				Diff{DiffInsert, "-"},
-				Diff{DiffEqual, "efghijklmnopqrs"},
-				Diff{DiffDelete, "EFGHIJKLMNOefg"},
+				{DiffDelete, "ABCD"},
+				{DiffEqual, "a"},
+				{DiffDelete, "="},
+				{DiffInsert, "-"},
+				{DiffEqual, "bcd"},
+				{DiffDelete, "="},
+				{DiffInsert, "-"},
+				{DiffEqual, "efghijklmnopqrs"},
+				{DiffDelete, "EFGHIJKLMNOefg"},
 			},
 		},
 		{
 			"a [[Pennsylvania]] and [[New",
 			" and [[Pennsylvania]]",
 			[]Diff{
-				Diff{DiffInsert, " "},
-				Diff{DiffEqual, "a"},
-				Diff{DiffInsert, "nd"},
-				Diff{DiffEqual, " [[Pennsylvania]]"},
-				Diff{DiffDelete, " and [[New"},
+				{DiffInsert, " "},
+				{DiffEqual, "a"},
+				{DiffInsert, "nd"},
+				{DiffEqual, " [[Pennsylvania]]"},
+				{DiffDelete, " and [[New"},
 			},
 		},
 	} {
 		actual := dmp.DiffMain(tc.Text1, tc.Text2, false)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
 	// Test for invalid UTF-8 sequences
-	assert.Equal(t, []Diff{
-		Diff{DiffDelete, "��"},
+	assertEqual(t, []Diff{
+		{DiffDelete, "��"},
 	}, dmp.DiffMain("\xe0\xe5", "", false))
 }
 
@@ -1394,8 +1428,11 @@ func TestDiffMainWithTimeout(t *testing.T) {
 	dmp := New()
 	dmp.DiffTimeout = 200 * time.Millisecond
 
-	a := "`Twas brillig, and the slithy toves\nDid gyre and gimble in the wabe:\nAll mimsy were the borogoves,\nAnd the mome raths outgrabe.\n"
-	b := "I am the very model of a modern major general,\nI've information vegetable, animal, and mineral,\nI know the kings of England, and I quote the fights historical,\nFrom Marathon to Waterloo, in order categorical.\n"
+	a := "`Twas brillig, and the slithy toves\nDid gyre and gimble in the wabe:\n" +
+		"All mimsy were the borogoves,\nAnd the mome raths outgrabe.\n"
+	b := "I am the very model of a modern major general,\n" +
+		"I've information vegetable, animal, and mineral,\nI know the kings of England, and I quote the " +
+		"fights historical,\nFrom Marathon to Waterloo, in order categorical.\n"
 	// Increase the text lengths by 1024 times to ensure a timeout.
 	for x := 0; x < 13; x++ {
 		a = a + a
@@ -1409,10 +1446,13 @@ func TestDiffMainWithTimeout(t *testing.T) {
 	delta := endTime.Sub(startTime)
 
 	// Test that we took at least the timeout period.
-	assert.True(t, delta >= dmp.DiffTimeout, fmt.Sprintf("%v !>= %v", delta, dmp.DiffTimeout))
+	assertEqual(t, true, delta >= dmp.DiffTimeout, fmt.Sprintf("%v !>= %v", delta, dmp.DiffTimeout))
 
-	// Test that we didn't take forever (be very forgiving). Theoretically this test could fail very occasionally if the OS task swaps or locks up for a second at the wrong moment.
-	assert.True(t, delta < (dmp.DiffTimeout*100), fmt.Sprintf("%v !< %v", delta, dmp.DiffTimeout*100))
+	// Test that we didn't take forever (be very forgiving).
+	// Theoretically this test could fail very occasionally if the OS task swaps or locks up
+	// for a second at the wrong moment.
+	assertEqual(t, true, delta < (dmp.DiffTimeout*100),
+		fmt.Sprintf("%v !< %v", delta, dmp.DiffTimeout*100))
 }
 
 func TestDiffMainWithCheckLines(t *testing.T) {
@@ -1427,16 +1467,22 @@ func TestDiffMainWithCheckLines(t *testing.T) {
 	// Test cases must be at least 100 chars long to pass the cutoff.
 	for i, tc := range []TestCase{
 		{
-			"1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n",
-			"abcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\n",
+			Text1: "1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n" +
+				"1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n",
+			Text2: "abcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\n" +
+				"abcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\n",
 		},
 		{
-			"1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890",
-			"abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
+			Text1: "1234567890123456789012345678901234567890123456789012345678901234567890123" +
+				"456789012345678901234567890123456789012345678901234567890",
+			Text2: "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcde" +
+				"fghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
 		},
 		{
-			"1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n",
-			"abcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n",
+			Text1: "1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n" +
+				"1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n",
+			Text2: "abcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n1234567890\n1234567890\n" +
+				"1234567890\nabcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n",
 		},
 	} {
 		resultWithoutCheckLines := dmp.DiffMain(tc.Text1, tc.Text2, false)
@@ -1444,15 +1490,30 @@ func TestDiffMainWithCheckLines(t *testing.T) {
 
 		// TODO this fails for the third test case, why?
 		if i != 2 {
-			assert.Equal(t, resultWithoutCheckLines, resultWithCheckLines, fmt.Sprintf("Test case #%d, %#v", i, tc))
+			assertEqual(
+				t,
+				resultWithoutCheckLines,
+				resultWithCheckLines,
+				fmt.Sprintf("Test case #%d, %#v", i, tc),
+			)
 		}
-		assert.Equal(t, diffRebuildTexts(resultWithoutCheckLines), diffRebuildTexts(resultWithCheckLines), fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(
+			t,
+			diffRebuildTexts(resultWithoutCheckLines),
+			diffRebuildTexts(resultWithCheckLines),
+			fmt.Sprintf("Test case #%d, %#v", i, tc),
+		)
 	}
 }
 
 func BenchmarkDiffMain(bench *testing.B) {
-	s1 := "`Twas brillig, and the slithy toves\nDid gyre and gimble in the wabe:\nAll mimsy were the borogoves,\nAnd the mome raths outgrabe.\n"
-	s2 := "I am the very model of a modern major general,\nI've information vegetable, animal, and mineral,\nI know the kings of England, and I quote the fights historical,\nFrom Marathon to Waterloo, in order categorical.\n"
+	var r []Diff
+
+	s1 := "`Twas brillig, and the slithy toves\nDid gyre and gimble in the wabe:\n" +
+		"All mimsy were the borogoves,\nAnd the mome raths outgrabe.\n"
+	s2 := "I am the very model of a modern major general,\nI've information vegetable," +
+		" animal, and mineral,\nI know the kings of England, and I quote the fights historical,\n" +
+		"From Marathon to Waterloo, in order categorical.\n"
 
 	// Increase the text lengths by 1024 times to ensure a timeout.
 	for x := 0; x < 10; x++ {
@@ -1466,25 +1527,31 @@ func BenchmarkDiffMain(bench *testing.B) {
 	bench.ResetTimer()
 
 	for i := 0; i < bench.N; i++ {
-		dmp.DiffMain(s1, s2, true)
+		r = dmp.DiffMain(s1, s2, true)
 	}
+
+	SinkSliceDiff = r
 }
 
 func BenchmarkDiffMainLarge(b *testing.B) {
-	s1, s2 := speedtestTexts()
+	var r []Diff
 
+	s1, s2 := speedtestTexts()
 	dmp := New()
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		dmp.DiffMain(s1, s2, true)
+		r = dmp.DiffMain(s1, s2, true)
 	}
+
+	SinkSliceDiff = r
 }
 
 func BenchmarkDiffMainRunesLargeLines(b *testing.B) {
-	s1, s2 := speedtestTexts()
+	var r []Diff
 
+	s1, s2 := speedtestTexts()
 	dmp := New()
 
 	b.ResetTimer()
@@ -1492,7 +1559,28 @@ func BenchmarkDiffMainRunesLargeLines(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		text1, text2, linearray := dmp.DiffLinesToRunes(s1, s2)
 
-		diffs := dmp.DiffMainRunes(text1, text2, false)
-		diffs = dmp.DiffCharsToLines(diffs, linearray)
+		r = dmp.DiffMainRunes(text1, text2, false)
+		r = dmp.DiffCharsToLines(r, linearray)
 	}
+
+	SinkSliceDiff = r
+}
+
+func BenchmarkDiffMainRunesLargeDiffLines(b *testing.B) {
+	var r []Diff
+
+	fp, _ := os.Open("../testdata/diff10klinestest.txt")
+	defer fp.Close()
+	data, _ := io.ReadAll(fp)
+	dmp := New()
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		text1, text2, linearray := dmp.DiffLinesToRunes(string(data), "")
+		r = dmp.DiffMainRunes(text1, text2, false)
+		r = dmp.DiffCharsToLines(r, linearray)
+	}
+
+	SinkSliceDiff = r
 }

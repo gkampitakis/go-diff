@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPatchString(t *testing.T) {
@@ -46,7 +44,7 @@ func TestPatchString(t *testing.T) {
 		},
 	} {
 		actual := tc.Patch.String()
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -60,29 +58,29 @@ func TestPatchFromText(t *testing.T) {
 	dmp := New()
 
 	for i, tc := range []TestCase{
-		{"", ""},
-		{"@@ -21,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n %0Alaz\n", ""},
-		{"@@ -1 +1 @@\n-a\n+b\n", ""},
-		{"@@ -1,3 +0,0 @@\n-abc\n", ""},
-		{"@@ -0,0 +1,3 @@\n+abc\n", ""},
-		{"@@ _0,0 +0,0 @@\n+abc\n", "Invalid patch string: @@ _0,0 +0,0 @@"},
-		{"Bad\nPatch\n", "Invalid patch string"},
+		{Patch: "", ErrorMessagePrefix: ""},
+		{Patch: "@@ -21,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n %0Alaz\n", ErrorMessagePrefix: ""},
+		{Patch: "@@ -1 +1 @@\n-a\n+b\n", ErrorMessagePrefix: ""},
+		{Patch: "@@ -1,3 +0,0 @@\n-abc\n", ErrorMessagePrefix: ""},
+		{Patch: "@@ -0,0 +1,3 @@\n+abc\n", ErrorMessagePrefix: ""},
+		{Patch: "@@ _0,0 +0,0 @@\n+abc\n", ErrorMessagePrefix: "Invalid patch string: @@ _0,0 +0,0 @@"},
+		{Patch: "Bad\nPatch\n", ErrorMessagePrefix: "Invalid patch string"},
 	} {
 		patches, err := dmp.PatchFromText(tc.Patch)
 		if tc.ErrorMessagePrefix == "" {
-			assert.Nil(t, err)
+			assertEqual(t, nil, err)
 
 			if tc.Patch == "" {
-				assert.Equal(t, []Patch{}, patches, fmt.Sprintf("Test case #%d, %#v", i, tc))
+				assertEqual(t, []Patch{}, patches, fmt.Sprintf("Test case #%d, %#v", i, tc))
 			} else {
-				assert.Equal(t, tc.Patch, patches[0].String(), fmt.Sprintf("Test case #%d, %#v", i, tc))
+				assertEqual(t, tc.Patch, patches[0].String(), fmt.Sprintf("Test case #%d, %#v", i, tc))
 			}
 		} else {
 			e := err.Error()
 			if strings.HasPrefix(e, tc.ErrorMessagePrefix) {
 				e = tc.ErrorMessagePrefix
 			}
-			assert.Equal(t, tc.ErrorMessagePrefix, e)
+			assertEqual(t, tc.ErrorMessagePrefix, e)
 		}
 	}
 
@@ -91,12 +89,14 @@ func TestPatchFromText(t *testing.T) {
 		{DiffInsert, "~!@#$%^&*()_+{}|:\"<>?"},
 	}
 
-	patches, err := dmp.PatchFromText("@@ -1,21 +1,21 @@\n-%601234567890-=%5B%5D%5C;',./\n+~!@#$%25%5E&*()_+%7B%7D%7C:%22%3C%3E?\n")
-	assert.Len(t, patches, 1)
-	assert.Equal(t, diffs,
+	patches, err := dmp.PatchFromText(
+		"@@ -1,21 +1,21 @@\n-%601234567890-=%5B%5D%5C;',./\n+~!@#$%25%5E&*()_+%7B%7D%7C:%22%3C%3E?\n",
+	)
+	assertEqual(t, 1, len(patches))
+	assertEqual(t, diffs,
 		patches[0].diffs,
 	)
-	assert.Nil(t, err)
+	assertEqual(t, nil, err)
 }
 
 func TestPatchToText(t *testing.T) {
@@ -111,10 +111,10 @@ func TestPatchToText(t *testing.T) {
 		{"@@ -1,9 +1,9 @@\n-f\n+F\n oo+fooba\n@@ -7,9 +7,9 @@\n obar\n-,\n+.\n  tes\n"},
 	} {
 		patches, err := dmp.PatchFromText(tc.Patch)
-		assert.Nil(t, err)
+		assertEqual(t, nil, err)
 
 		actual := dmp.PatchToText(patches)
-		assert.Equal(t, tc.Patch, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Patch, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -132,16 +132,36 @@ func TestPatchAddContext(t *testing.T) {
 	dmp.PatchMargin = 4
 
 	for i, tc := range []TestCase{
-		{"Simple case", "@@ -21,4 +21,10 @@\n-jump\n+somersault\n", "The quick brown fox jumps over the lazy dog.", "@@ -17,12 +17,18 @@\n fox \n-jump\n+somersault\n s ov\n"},
-		{"Not enough trailing context", "@@ -21,4 +21,10 @@\n-jump\n+somersault\n", "The quick brown fox jumps.", "@@ -17,10 +17,16 @@\n fox \n-jump\n+somersault\n s.\n"},
-		{"Not enough leading context", "@@ -3 +3,2 @@\n-e\n+at\n", "The quick brown fox jumps.", "@@ -1,7 +1,8 @@\n Th\n-e\n+at\n  qui\n"},
-		{"Ambiguity", "@@ -3 +3,2 @@\n-e\n+at\n", "The quick brown fox jumps.  The quick brown fox crashes.", "@@ -1,27 +1,28 @@\n Th\n-e\n+at\n  quick brown fox jumps. \n"},
+		{
+			Name:     "Simple case",
+			Patch:    "@@ -21,4 +21,10 @@\n-jump\n+somersault\n",
+			Text:     "The quick brown fox jumps over the lazy dog.",
+			Expected: "@@ -17,12 +17,18 @@\n fox \n-jump\n+somersault\n s ov\n",
+		},
+		{
+			Name:     "Not enough trailing context",
+			Patch:    "@@ -21,4 +21,10 @@\n-jump\n+somersault\n",
+			Text:     "The quick brown fox jumps.",
+			Expected: "@@ -17,10 +17,16 @@\n fox \n-jump\n+somersault\n s.\n",
+		},
+		{
+			Name:     "Not enough leading context",
+			Patch:    "@@ -3 +3,2 @@\n-e\n+at\n",
+			Text:     "The quick brown fox jumps.",
+			Expected: "@@ -1,7 +1,8 @@\n Th\n-e\n+at\n  qui\n",
+		},
+		{
+			Name:     "Ambiguity",
+			Patch:    "@@ -3 +3,2 @@\n-e\n+at\n",
+			Text:     "The quick brown fox jumps.  The quick brown fox crashes.",
+			Expected: "@@ -1,27 +1,28 @@\n Th\n-e\n+at\n  quick brown fox jumps. \n",
+		},
 	} {
 		patches, err := dmp.PatchFromText(tc.Patch)
-		assert.Nil(t, err)
+		assertEqual(t, nil, err)
 
 		actual := dmp.PatchAddContext(patches[0], tc.Text)
-		assert.Equal(t, tc.Expected, actual.String(), fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual.String(), fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 }
 
@@ -162,15 +182,69 @@ func TestPatchMakeAndPatchToText(t *testing.T) {
 	text2 := "That quick brown fox jumped over a lazy dog."
 
 	for i, tc := range []TestCase{
-		{"Null case", "", "", nil, ""},
-		{"Text2+Text1 inputs", text2, text1, nil, "@@ -1,8 +1,7 @@\n Th\n-at\n+e\n  qui\n@@ -21,17 +21,18 @@\n jump\n-ed\n+s\n  over \n-a\n+the\n  laz\n"},
-		{"Text1+Text2 inputs", text1, text2, nil, "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n"},
-		{"Diff input", dmp.DiffMain(text1, text2, false), nil, nil, "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n"},
-		{"Text1+Diff inputs", text1, dmp.DiffMain(text1, text2, false), nil, "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n"},
-		{"Text1+Text2+Diff inputs (deprecated)", text1, text2, dmp.DiffMain(text1, text2, false), "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n"},
-		{"Character encoding", "`1234567890-=[]\\;',./", "~!@#$%^&*()_+{}|:\"<>?", nil, "@@ -1,21 +1,21 @@\n-%601234567890-=%5B%5D%5C;',./\n+~!@#$%25%5E&*()_+%7B%7D%7C:%22%3C%3E?\n"},
-		{"Long string with repeats", strings.Repeat("abcdef", 100), strings.Repeat("abcdef", 100) + "123", nil, "@@ -573,28 +573,31 @@\n cdefabcdefabcdefabcdefabcdef\n+123\n"},
-		{"Corner case of #31 fixed by #32", "2016-09-01T03:07:14.807830741Z", "2016-09-01T03:07:15.154800781Z", nil, "@@ -15,16 +15,16 @@\n 07:1\n+5.15\n 4\n-.\n 80\n+0\n 78\n-3074\n 1Z\n"},
+		{
+			Name:     "Null case",
+			Input1:   "",
+			Input2:   "",
+			Input3:   nil,
+			Expected: "",
+		},
+		{
+			Name:     "Text2+Text1 inputs",
+			Input1:   text2,
+			Input2:   text1,
+			Input3:   nil,
+			Expected: "@@ -1,8 +1,7 @@\n Th\n-at\n+e\n  qui\n@@ -21,17 +21,18 @@\n jump\n-ed\n+s\n  over \n-a\n+the\n  laz\n",
+		},
+		{
+			Name:     "Text1+Text2 inputs",
+			Input1:   text1,
+			Input2:   text2,
+			Input3:   nil,
+			Expected: "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n",
+		},
+		{
+			Name:     "Diff input",
+			Input1:   dmp.DiffMain(text1, text2, false),
+			Input2:   nil,
+			Input3:   nil,
+			Expected: "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n",
+		},
+		{
+			Name:     "Text1+Diff inputs",
+			Input1:   text1,
+			Input2:   dmp.DiffMain(text1, text2, false),
+			Input3:   nil,
+			Expected: "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n",
+		},
+		{
+			Name:     "Text1+Text2+Diff inputs (deprecated)",
+			Input1:   text1,
+			Input2:   text2,
+			Input3:   dmp.DiffMain(text1, text2, false),
+			Expected: "@@ -1,11 +1,12 @@\n Th\n-e\n+at\n  quick b\n@@ -22,18 +22,17 @@\n jump\n-s\n+ed\n  over \n-the\n+a\n  laz\n",
+		},
+		{
+			Name:     "Character encoding",
+			Input1:   "`1234567890-=[]\\;',./",
+			Input2:   "~!@#$%^&*()_+{}|:\"<>?",
+			Input3:   nil,
+			Expected: "@@ -1,21 +1,21 @@\n-%601234567890-=%5B%5D%5C;',./\n+~!@#$%25%5E&*()_+%7B%7D%7C:%22%3C%3E?\n",
+		},
+		{
+			Name:     "Long string with repeats",
+			Input1:   strings.Repeat("abcdef", 100),
+			Input2:   strings.Repeat("abcdef", 100) + "123",
+			Input3:   nil,
+			Expected: "@@ -573,28 +573,31 @@\n cdefabcdefabcdefabcdefabcdef\n+123\n",
+		},
+		{
+			Name:     "Corner case of #31 fixed by #32",
+			Input1:   "2016-09-01T03:07:14.807830741Z",
+			Input2:   "2016-09-01T03:07:15.154800781Z",
+			Input3:   nil,
+			Expected: "@@ -15,16 +15,16 @@\n 07:1\n+5.15\n 4\n-.\n 80\n+0\n 78\n-3074\n 1Z\n",
+		},
 	} {
 		var patches []Patch
 		if tc.Input3 != nil {
@@ -184,28 +258,34 @@ func TestPatchMakeAndPatchToText(t *testing.T) {
 		}
 
 		actual := dmp.PatchToText(patches)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 	}
 
 	// Corner case of #28 wrong patch with timeout of 0
 	dmp.DiffTimeout = 0
 
-	text1 = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus ut risus et enim consectetur convallis a non ipsum. Sed nec nibh cursus, interdum libero vel."
-	text2 = "Lorem a ipsum dolor sit amet, consectetur adipiscing elit. Vivamus ut risus et enim consectetur convallis a non ipsum. Sed nec nibh cursus, interdum liberovel."
+	text1 = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus ut risus et " +
+		"enim consectetur convallis a non ipsum. Sed nec nibh cursus, interdum libero vel."
+	text2 = "Lorem a ipsum dolor sit amet, consectetur adipiscing elit. Vivamus ut risus et " +
+		"enim consectetur convallis a non ipsum. Sed nec nibh cursus, interdum liberovel."
 
 	diffs := dmp.DiffMain(text1, text2, true)
 	// Additional check that the diff texts are equal to the originals even if we are using DiffMain with checklines=true #29
-	assert.Equal(t, text1, dmp.DiffText1(diffs))
-	assert.Equal(t, text2, dmp.DiffText2(diffs))
+	assertEqual(t, text1, dmp.DiffText1(diffs))
+	assertEqual(t, text2, dmp.DiffText2(diffs))
 
 	patches := dmp.PatchMake(text1, diffs)
 
 	actual := dmp.PatchToText(patches)
-	assert.Equal(t, "@@ -1,14 +1,16 @@\n Lorem \n+a \n ipsum do\n@@ -148,13 +148,12 @@\n m libero\n- \n vel.\n", actual)
+	assertEqual(
+		t,
+		"@@ -1,14 +1,16 @@\n Lorem \n+a \n ipsum do\n@@ -148,13 +148,12 @@\n m libero\n- \n vel.\n",
+		actual,
+	)
 
 	// Check that empty Patch array is returned for no parameter call
 	patches = dmp.PatchMake()
-	assert.Equal(t, []Patch{}, patches)
+	assertEqual(t, []Patch{}, patches)
 }
 
 func TestPatchSplitMax(t *testing.T) {
@@ -219,16 +299,35 @@ func TestPatchSplitMax(t *testing.T) {
 	dmp := New()
 
 	for i, tc := range []TestCase{
-		{"abcdefghijklmnopqrstuvwxyz01234567890", "XabXcdXefXghXijXklXmnXopXqrXstXuvXwxXyzX01X23X45X67X89X0", "@@ -1,32 +1,46 @@\n+X\n ab\n+X\n cd\n+X\n ef\n+X\n gh\n+X\n ij\n+X\n kl\n+X\n mn\n+X\n op\n+X\n qr\n+X\n st\n+X\n uv\n+X\n wx\n+X\n yz\n+X\n 012345\n@@ -25,13 +39,18 @@\n zX01\n+X\n 23\n+X\n 45\n+X\n 67\n+X\n 89\n+X\n 0\n"},
-		{"abcdef1234567890123456789012345678901234567890123456789012345678901234567890uvwxyz", "abcdefuvwxyz", "@@ -3,78 +3,8 @@\n cdef\n-1234567890123456789012345678901234567890123456789012345678901234567890\n uvwx\n"},
-		{"1234567890123456789012345678901234567890123456789012345678901234567890", "abc", "@@ -1,32 +1,4 @@\n-1234567890123456789012345678\n 9012\n@@ -29,32 +1,4 @@\n-9012345678901234567890123456\n 7890\n@@ -57,14 +1,3 @@\n-78901234567890\n+abc\n"},
-		{"abcdefghij , h : 0 , t : 1 abcdefghij , h : 0 , t : 1 abcdefghij , h : 0 , t : 1", "abcdefghij , h : 1 , t : 1 abcdefghij , h : 1 , t : 1 abcdefghij , h : 0 , t : 1", "@@ -2,32 +2,32 @@\n bcdefghij , h : \n-0\n+1\n  , t : 1 abcdef\n@@ -29,32 +29,32 @@\n bcdefghij , h : \n-0\n+1\n  , t : 1 abcdef\n"},
+		{
+			Text1: "abcdefghijklmnopqrstuvwxyz01234567890",
+			Text2: "XabXcdXefXghXijXklXmnXopXqrXstXuvXwxXyzX01X23X45X67X89X0",
+			Expected: "@@ -1,32 +1,46 @@\n+X\n ab\n+X\n cd\n+X\n ef\n+X\n gh\n+X\n ij\n+X\n kl\n+X\n mn\n+X\n op\n+X\n qr\n+X\n " +
+				"st\n+X\n uv\n+X\n wx\n+X\n yz\n+X\n 012345\n@@ -25,13 +39,18 @@\n zX01\n+X\n 23\n+X\n 45\n+X\n 67\n+X\n 89\n+X\n 0\n",
+		},
+		{
+			Text1:    "abcdef1234567890123456789012345678901234567890123456789012345678901234567890uvwxyz",
+			Text2:    "abcdefuvwxyz",
+			Expected: "@@ -3,78 +3,8 @@\n cdef\n-1234567890123456789012345678901234567890123456789012345678901234567890\n uvwx\n",
+		},
+		{
+			Text1: "1234567890123456789012345678901234567890123456789012345678901234567890",
+			Text2: "abc",
+			Expected: "@@ -1,32 +1,4 @@\n-1234567890123456789012345678\n 9012\n@@ -29,32 +1,4 @@\n-9012345678901234" +
+				"567890123456\n 7890\n@@ -57,14 +1,3 @@\n-78901234567890\n+abc\n",
+		},
+		{
+			Text1: "abcdefghij , h : 0 , t : 1 abcdefghij , h : 0 , t : 1 abcdefghij , h : 0 , t : 1",
+			Text2: "abcdefghij , h : 1 , t : 1 abcdefghij , h : 1 , t : 1 abcdefghij , h : 0 , t : 1",
+			Expected: "@@ -2,32 +2,32 @@\n bcdefghij , h : \n-0\n+1\n  , t : 1 abcdef\n@@ -29,32 +29,32 @@\n " +
+				"bcdefghij , h : \n-0\n+1\n  , t : 1 abcdef\n",
+		},
 	} {
 		patches := dmp.PatchMake(tc.Text1, tc.Text2)
 		patches = dmp.PatchSplitMax(patches)
 
 		actual := dmp.PatchToText(patches)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
 
@@ -246,19 +345,42 @@ func TestPatchAddPadding(t *testing.T) {
 	dmp := New()
 
 	for i, tc := range []TestCase{
-		{"Both edges full", "", "test", "@@ -0,0 +1,4 @@\n+test\n", "@@ -1,8 +1,12 @@\n %01%02%03%04\n+test\n %01%02%03%04\n"},
-		{"Both edges partial", "XY", "XtestY", "@@ -1,2 +1,6 @@\n X\n+test\n Y\n", "@@ -2,8 +2,12 @@\n %02%03%04X\n+test\n Y%01%02%03\n"},
-		{"Both edges none", "XXXXYYYY", "XXXXtestYYYY", "@@ -1,8 +1,12 @@\n XXXX\n+test\n YYYY\n", "@@ -5,8 +5,12 @@\n XXXX\n+test\n YYYY\n"},
+		{
+			Name:                "Both edges full",
+			Text1:               "",
+			Text2:               "test",
+			Expected:            "@@ -0,0 +1,4 @@\n+test\n",
+			ExpectedWithPadding: "@@ -1,8 +1,12 @@\n %01%02%03%04\n+test\n %01%02%03%04\n",
+		},
+		{
+			Name:                "Both edges partial",
+			Text1:               "XY",
+			Text2:               "XtestY",
+			Expected:            "@@ -1,2 +1,6 @@\n X\n+test\n Y\n",
+			ExpectedWithPadding: "@@ -2,8 +2,12 @@\n %02%03%04X\n+test\n Y%01%02%03\n",
+		},
+		{
+			Name:                "Both edges none",
+			Text1:               "XXXXYYYY",
+			Text2:               "XXXXtestYYYY",
+			Expected:            "@@ -1,8 +1,12 @@\n XXXX\n+test\n YYYY\n",
+			ExpectedWithPadding: "@@ -5,8 +5,12 @@\n XXXX\n+test\n YYYY\n",
+		},
 	} {
 		patches := dmp.PatchMake(tc.Text1, tc.Text2)
 
 		actual := dmp.PatchToText(patches)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
 
 		dmp.PatchAddPadding(patches)
 
 		actualWithPadding := dmp.PatchToText(patches)
-		assert.Equal(t, tc.ExpectedWithPadding, actualWithPadding, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(
+			t,
+			tc.ExpectedWithPadding,
+			actualWithPadding,
+			fmt.Sprintf("Test case #%d, %s", i, tc.Name),
+		)
 	}
 }
 
@@ -280,30 +402,87 @@ func TestPatchApply(t *testing.T) {
 	dmp.PatchDeleteThreshold = 0.5
 
 	for i, tc := range []TestCase{
-		{"Null case", "", "", "Hello world.", "Hello world.", []bool{}},
-		{"Exact match", "The quick brown fox jumps over the lazy dog.", "That quick brown fox jumped over a lazy dog.", "The quick brown fox jumps over the lazy dog.", "That quick brown fox jumped over a lazy dog.", []bool{true, true}},
-		{"Partial match", "The quick brown fox jumps over the lazy dog.", "That quick brown fox jumped over a lazy dog.", "The quick red rabbit jumps over the tired tiger.", "That quick red rabbit jumped over a tired tiger.", []bool{true, true}},
-		{"Failed match", "The quick brown fox jumps over the lazy dog.", "That quick brown fox jumped over a lazy dog.", "I am the very model of a modern major general.", "I am the very model of a modern major general.", []bool{false, false}},
-		{"Big delete, small Diff", "x1234567890123456789012345678901234567890123456789012345678901234567890y", "xabcy", "x123456789012345678901234567890-----++++++++++-----123456789012345678901234567890y", "xabcy", []bool{true, true}},
-		{"Big delete, big Diff 1", "x1234567890123456789012345678901234567890123456789012345678901234567890y", "xabcy", "x12345678901234567890---------------++++++++++---------------12345678901234567890y", "xabc12345678901234567890---------------++++++++++---------------12345678901234567890y", []bool{false, true}},
+		{
+			Name:  "Null case",
+			Text1: "",
+			Text2: "", TextBase: "Hello world.",
+			Expected:        "Hello world.",
+			ExpectedApplies: []bool{},
+		},
+		{
+			Name:            "Exact match",
+			Text1:           "The quick brown fox jumps over the lazy dog.",
+			Text2:           "That quick brown fox jumped over a lazy dog.",
+			TextBase:        "The quick brown fox jumps over the lazy dog.",
+			Expected:        "That quick brown fox jumped over a lazy dog.",
+			ExpectedApplies: []bool{true, true},
+		},
+		{
+			Name:            "Partial match",
+			Text1:           "The quick brown fox jumps over the lazy dog.",
+			Text2:           "That quick brown fox jumped over a lazy dog.",
+			TextBase:        "The quick red rabbit jumps over the tired tiger.",
+			Expected:        "That quick red rabbit jumped over a tired tiger.",
+			ExpectedApplies: []bool{true, true},
+		},
+		{
+			Name:            "Failed match",
+			Text1:           "The quick brown fox jumps over the lazy dog.",
+			Text2:           "That quick brown fox jumped over a lazy dog.",
+			TextBase:        "I am the very model of a modern major general.",
+			Expected:        "I am the very model of a modern major general.",
+			ExpectedApplies: []bool{false, false},
+		},
+		{
+			Name:            "Big delete, small Diff",
+			Text1:           "x1234567890123456789012345678901234567890123456789012345678901234567890y",
+			Text2:           "xabcy",
+			TextBase:        "x123456789012345678901234567890-----++++++++++-----123456789012345678901234567890y",
+			Expected:        "xabcy",
+			ExpectedApplies: []bool{true, true},
+		},
+		{
+			Name:            "Big delete, big Diff 1",
+			Text1:           "x1234567890123456789012345678901234567890123456789012345678901234567890y",
+			Text2:           "xabcy",
+			TextBase:        "x12345678901234567890---------------++++++++++---------------12345678901234567890y",
+			Expected:        "xabc12345678901234567890---------------++++++++++---------------12345678901234567890y",
+			ExpectedApplies: []bool{false, true},
+		},
 	} {
 		patches := dmp.PatchMake(tc.Text1, tc.Text2)
 
 		actual, actualApplies := dmp.PatchApply(patches, tc.TextBase)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
-		assert.Equal(t, tc.ExpectedApplies, actualApplies, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(
+			t,
+			tc.ExpectedApplies,
+			actualApplies,
+			fmt.Sprintf("Test case #%d, %s", i, tc.Name),
+		)
 	}
 
 	dmp.PatchDeleteThreshold = 0.6
 
 	for i, tc := range []TestCase{
-		{"Big delete, big Diff 2", "x1234567890123456789012345678901234567890123456789012345678901234567890y", "xabcy", "x12345678901234567890---------------++++++++++---------------12345678901234567890y", "xabcy", []bool{true, true}},
+		{
+			Name:     "Big delete, big Diff 2",
+			Text1:    "x1234567890123456789012345678901234567890123456789012345678901234567890y",
+			Text2:    "xabcy",
+			TextBase: "x12345678901234567890---------------++++++++++---------------12345678901234567890y",
+			Expected: "xabcy", ExpectedApplies: []bool{true, true},
+		},
 	} {
 		patches := dmp.PatchMake(tc.Text1, tc.Text2)
 
 		actual, actualApplies := dmp.PatchApply(patches, tc.TextBase)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
-		assert.Equal(t, tc.ExpectedApplies, actualApplies, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(
+			t,
+			tc.ExpectedApplies,
+			actualApplies,
+			fmt.Sprintf("Test case #%d, %s", i, tc.Name),
+		)
 	}
 
 	dmp.MatchDistance = 0
@@ -311,29 +490,105 @@ func TestPatchApply(t *testing.T) {
 	dmp.PatchDeleteThreshold = 0.5
 
 	for i, tc := range []TestCase{
-		{"Compensate for failed patch", "abcdefghijklmnopqrstuvwxyz--------------------1234567890", "abcXXXXXXXXXXdefghijklmnopqrstuvwxyz--------------------1234567YYYYYYYYYY890", "ABCDEFGHIJKLMNOPQRSTUVWXYZ--------------------1234567890", "ABCDEFGHIJKLMNOPQRSTUVWXYZ--------------------1234567YYYYYYYYYY890", []bool{false, true}},
+		{
+			Name:            "Compensate for failed patch",
+			Text1:           "abcdefghijklmnopqrstuvwxyz--------------------1234567890",
+			Text2:           "abcXXXXXXXXXXdefghijklmnopqrstuvwxyz--------------------1234567YYYYYYYYYY890",
+			TextBase:        "ABCDEFGHIJKLMNOPQRSTUVWXYZ--------------------1234567890",
+			Expected:        "ABCDEFGHIJKLMNOPQRSTUVWXYZ--------------------1234567YYYYYYYYYY890",
+			ExpectedApplies: []bool{false, true},
+		},
 	} {
 		patches := dmp.PatchMake(tc.Text1, tc.Text2)
 
 		actual, actualApplies := dmp.PatchApply(patches, tc.TextBase)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
-		assert.Equal(t, tc.ExpectedApplies, actualApplies, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(
+			t,
+			tc.ExpectedApplies,
+			actualApplies,
+			fmt.Sprintf("Test case #%d, %s", i, tc.Name),
+		)
 	}
 
 	dmp.MatchThreshold = 0.5
 	dmp.MatchDistance = 1000
 
 	for i, tc := range []TestCase{
-		{"No side effects", "", "test", "", "test", []bool{true}},
-		{"No side effects with major delete", "The quick brown fox jumps over the lazy dog.", "Woof", "The quick brown fox jumps over the lazy dog.", "Woof", []bool{true, true}},
-		{"Edge exact match", "", "test", "", "test", []bool{true}},
-		{"Near edge exact match", "XY", "XtestY", "XY", "XtestY", []bool{true}},
-		{"Edge partial match", "y", "y123", "x", "x123", []bool{true}},
+		{
+			Name:            "No side effects",
+			Text1:           "",
+			Text2:           "test",
+			TextBase:        "",
+			Expected:        "test",
+			ExpectedApplies: []bool{true},
+		},
+		{
+			Name:            "No side effects with major delete",
+			Text1:           "The quick brown fox jumps over the lazy dog.",
+			Text2:           "Woof",
+			TextBase:        "The quick brown fox jumps over the lazy dog.",
+			Expected:        "Woof",
+			ExpectedApplies: []bool{true, true},
+		},
+		{
+			Name:  "Edge exact match",
+			Text1: "", Text2: "test",
+			TextBase:        "",
+			Expected:        "test",
+			ExpectedApplies: []bool{true},
+		},
+		{
+			Name:            "Near edge exact match",
+			Text1:           "XY",
+			Text2:           "XtestY",
+			TextBase:        "XY",
+			Expected:        "XtestY",
+			ExpectedApplies: []bool{true},
+		},
+		{
+			Name:            "Edge partial match",
+			Text1:           "y",
+			Text2:           "y123",
+			TextBase:        "x",
+			Expected:        "x123",
+			ExpectedApplies: []bool{true},
+		},
 	} {
 		patches := dmp.PatchMake(tc.Text1, tc.Text2)
 
 		actual, actualApplies := dmp.PatchApply(patches, tc.TextBase)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
-		assert.Equal(t, tc.ExpectedApplies, actualApplies, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %s", i, tc.Name))
+		assertEqual(
+			t,
+			tc.ExpectedApplies,
+			actualApplies,
+			fmt.Sprintf("Test case #%d, %s", i, tc.Name),
+		)
 	}
+}
+
+func TestPatchOutOfRangePanic(t *testing.T) {
+	text1 := `
+  1111111111111 000000
+  ------------- ------
+  xxxxxxxxxxxxx ------
+  xxxxxxxxxxxxx ------
+  xxxxxxxxxxxxx xxxxxx
+  xxxxxxxxxxxxx ......
+  xxxxxxxxxxxxx 111111
+  xxxxxxxxxxxxx ??????
+  xxxxxxxxxxxxx 333333
+  xxxxxxxxxxxxx 555555
+  xxxxxxxxxx xxxxx
+  xxxxxxxxxx xxxxx
+  xxxxxxxxxx xxxxx
+  xxxxxxxxxx xxxxx
+`
+	text2 := `
+  2222222222222 000000
+  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+	patches := New().PatchMake(text1, text2)
+	assertEqual(t, 6, len(patches), "Issue https://github.com/sergi/go-diff/issues/127")
 }

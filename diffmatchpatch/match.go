@@ -61,7 +61,8 @@ func (dmp *DiffMatchPatch) MatchBitap(text, pattern string, loc int) int {
 	binMax := len(pattern) + len(text)
 	lastRd := []int{}
 	for d := 0; d < len(pattern); d++ {
-		// Scan for the best match; each iteration allows for one more error. Run a binary search to determine how far from 'loc' we can stray at this error level.
+		// Scan for the best match; each iteration allows for one more error.
+		// Run a binary search to determine how far from 'loc' we can stray at this error level.
 		binMin = 0
 		binMid = binMax
 		for binMin < binMid {

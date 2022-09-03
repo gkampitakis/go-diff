@@ -14,7 +14,12 @@ import (
 )
 
 // unescaper unescapes selected chars for compatibility with JavaScript's encodeURI.
-// In speed critical applications this could be dropped since the receiving application will certainly decode these fine. Note that this function is case-sensitive.  Thus "%3F" would not be unescaped.  But this is ok because it is only called with the output of HttpUtility.UrlEncode which returns lowercase hex. Example: "%3f" -> "?", "%24" -> "$", etc.
+// In speed critical applications this could be dropped since the receiving application
+// will certainly decode these fine. Note that this function is case-sensitive.
+// Thus "%3F" would not be unescaped.
+// But this is ok because it is only called with the output of HttpUtility.UrlEncode which returns lowercase hex.
+//
+//	Example: "%3f" -> "?", "%24" -> "$", etc.
 var unescaper = strings.NewReplacer(
 	"%21", "!", "%7E", "~", "%27", "'",
 	"%28", "(", "%29", ")", "%3B", ";",
@@ -23,7 +28,7 @@ var unescaper = strings.NewReplacer(
 	"%2B", "+", "%24", "$", "%2C", ",", "%23", "#", "%2A", "*")
 
 // indexOf returns the first index of pattern in str, starting at str[i].
-func indexOf(str string, pattern string, i int) int {
+func indexOf(str, pattern string, i int) int {
 	if i > len(str)-1 {
 		return -1
 	}
@@ -38,7 +43,7 @@ func indexOf(str string, pattern string, i int) int {
 }
 
 // lastIndexOf returns the last index of pattern in str, starting at str[i].
-func lastIndexOf(str string, pattern string, i int) int {
+func lastIndexOf(str, pattern string, i int) int {
 	if i < 0 {
 		return -1
 	}
