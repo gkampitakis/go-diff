@@ -29,7 +29,7 @@ func TestPatchString(t *testing.T) {
 				Length1: 18,
 				Length2: 17,
 
-				diffs: []Diff{
+				Diffs: []Diff{
 					{DiffEqual, "jump"},
 					{DiffDelete, "s"},
 					{DiffInsert, "ed"},
@@ -94,7 +94,7 @@ func TestPatchFromText(t *testing.T) {
 	)
 	assertEqual(t, 1, len(patches))
 	assertEqual(t, diffs,
-		patches[0].diffs,
+		patches[0].Diffs,
 	)
 	assertEqual(t, nil, err)
 }
