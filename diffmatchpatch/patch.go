@@ -113,13 +113,32 @@ func (dmp *DiffMatchPatch) PatchAddContext(patch Patch, text string) Patch {
 }
 
 // PatchMake computes a list of patches.
+// Use diffs if provided, otherwise compute it ourselves.
+//
+// There are four ways to call this function, depending on what data is
+// available to the caller:
+//
+//	Method 1:
+//	a = diffs
+//	Method 2:
+//	a = text1, b = text2
+//	Method 3 (optimal):
+//	a = text1, b = diffs
+//	Method 4 (deprecated, use method 3):
+//	a = text1, b = text2, c = diffs
 func (dmp *DiffMatchPatch) PatchMake(opt ...interface{}) []Patch {
-	if len(opt) == 1 {
+	lenOpt := len(opt)
+
+	if lenOpt == 1 {
 		diffs, _ := opt[0].([]Diff)
 		text1 := dmp.DiffText1(diffs)
+
 		return dmp.PatchMake(text1, diffs)
-	} else if len(opt) == 2 {
-		text1 := opt[0].(string)
+	}
+
+	if lenOpt == 2 {
+		text1, _ := opt[0].(string)
+
 		switch t := opt[1].(type) {
 		case string:
 			diffs := dmp.DiffMain(text1, t, true)
@@ -127,19 +146,23 @@ func (dmp *DiffMatchPatch) PatchMake(opt ...interface{}) []Patch {
 				diffs = dmp.DiffCleanupSemantic(diffs)
 				diffs = dmp.DiffCleanupEfficiency(diffs)
 			}
+
 			return dmp.PatchMake(text1, diffs)
 		case []Diff:
-			return dmp.patchMake2(text1, t)
+			return dmp.patchMakeDiffs(text1, t)
 		}
-	} else if len(opt) == 3 {
+	}
+
+	if lenOpt == 3 {
 		return dmp.PatchMake(opt[0], opt[2])
 	}
+
 	return []Patch{}
 }
 
-// patchMake2 computes a list of patches to turn text1 into text2.
+// patchMakeDiffs computes a list of patches to turn text1 into text2.
 // text2 is not provided, diffs are the delta between text1 and text2.
-func (dmp *DiffMatchPatch) patchMake2(text1 string, diffs []Diff) []Patch {
+func (dmp *DiffMatchPatch) patchMakeDiffs(text1 string, diffs []Diff) []Patch {
 	// Check for null inputs not needed since null can't be passed in C#.
 	patches := []Patch{}
 	if len(diffs) == 0 {
@@ -179,18 +202,16 @@ func (dmp *DiffMatchPatch) patchMake2(text1 string, diffs []Diff) []Patch {
 				patch.Length1 += len(aDiff.Text)
 				patch.Length2 += len(aDiff.Text)
 			}
-			if len(aDiff.Text) >= 2*dmp.PatchMargin {
+			if len(aDiff.Text) >= 2*dmp.PatchMargin && len(patch.Diffs) != 0 {
 				// Time for a new patch.
-				if len(patch.Diffs) != 0 {
-					patch = dmp.PatchAddContext(patch, prepatchText)
-					patches = append(patches, patch)
-					patch = Patch{}
-					// Unlike Unidiff, our patch lists have a rolling context.
-					// http://code.google.com/p/google-diff-match-patch/wiki/Unidiff Update prepatch text & pos to
-					// reflect the application of the just completed patch.
-					prepatchText = postpatchText
-					charCount1 = charCount2
-				}
+				patch = dmp.PatchAddContext(patch, prepatchText)
+				patches = append(patches, patch)
+				patch = Patch{}
+				// Unlike Unidiff, our patch lists have a rolling context.
+				// http://code.google.com/p/google-diff-match-patch/wiki/Unidiff Update prepatch text & pos to
+				// reflect the application of the just completed patch.
+				prepatchText = postpatchText
+				charCount1 = charCount2
 			}
 		}
 
