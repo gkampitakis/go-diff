@@ -567,3 +567,59 @@ func TestPatchApply(t *testing.T) {
 		)
 	}
 }
+
+func TestIssues(t *testing.T) {
+	t.Run("https://github.com/sergi/go-diff/issues/127", func(t *testing.T) {
+		text1 := `
+			1111111111111 000000
+			------------- ------
+			xxxxxxxxxxxxx ------
+			xxxxxxxxxxxxx ------
+			xxxxxxxxxxxxx xxxxxx
+			xxxxxxxxxxxxx ......
+			xxxxxxxxxxxxx 111111
+			xxxxxxxxxxxxx ??????
+			xxxxxxxxxxxxx 333333
+			xxxxxxxxxxxxx 555555
+			xxxxxxxxxx xxxxx
+			xxxxxxxxxx xxxxx
+			xxxxxxxxxx xxxxx
+			xxxxxxxxxx xxxxx
+		`
+		text2 := `
+			2222222222222 000000
+			xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+		patches := New().PatchMake(text1, text2)
+		assertEqual(t, 6, len(patches), "Issue https://github.com/sergi/go-diff/issues/127")
+	})
+
+	t.Run("https://github.com/sergi/go-diff/issues/4", func(t *testing.T) {
+		// doesn't panic
+		text1 := "1\n2\n3\n4\n5\n6\n7\n3\n8\n9\n3\n10\n3\n11\n3\n12\n13\n14\n15\n12\n13" +
+			"\n16\n13\n13\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34" +
+			"\n35\n12\n36\n37\n38\n39\n40\n41\n42\n13\n43\n44\n13\n45\n46\n47\n13\n13\n48\n49\n50" +
+			"\n51\n52\n13\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n13\n" +
+			"70\n71\n72\n73\n74\n13\n75\n13\n76\n77\n78\n79\n80\n81\n82\n83\n84\n85\n86\n87\n88\n89\n" +
+			"90\n67\n91\n92\n93\n81\n68\n13\n94\n71\n95\n96\n97\n98\n99\n100\n101\n102\n63\n103\n67\n104" +
+			"\n105\n13\n106\n107\n108\n109\n110\n111\n112\n113\n114\n115\n90\n116\n67\n13\n117\n72\n73\n" +
+			"74\n13\n75\n13\n76\n118\n119\n120\n78\n68\n121\n13\n122\n123\n124\n125\n93\n126\n68\n127\n13" +
+			"\n128\n129\n130\n131\n132\n133\n134\n135\n13\n136\n137\n138\n13\n78\n68\n13\n139\n140\n141\n142" +
+			"\n68\n13\n143\n144\n145\n146\n13\n147\n148\n13\n149\n150\n151\n152\n153\n150\n154\n13\n155\n156\n"
+		text2 := "1\n2\n3\n4\n5\n6\n7\n3\n157\n9\n3\n10\n3\n11\n3\n12\n13\n14\n15\n12\n13\n16\n13\n13" +
+			"\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n12\n36\n37\n38\n39\n40" +
+			"\n41\n42\n13\n158\n159\n13\n45\n46\n47\n13\n13\n48\n49\n50\n51\n13\n53\n54\n55\n56\n57\n160\n59\n60" +
+			"\n61\n62\n63\n64\n161\n66\n67\n68\n69\n13\n70\n71\n72\n73\n74\n13\n75\n13\n162\n77\n78\n79\n80\n81\n" +
+			"82\n83\n84\n85\n86\n88\n89\n90\n67\n91\n92\n93\n81\n68\n13\n94\n71\n95\n96\n97\n98\n99\n100\n101\n102" +
+			"\n63\n103\n67\n104\n105\n13\n106\n107\n108\n109\n110\n111\n112\n113\n114\n115\n90\n116\n67\n13\n117\n72" +
+			"\n73\n74\n13\n75\n13\n163\n119\n120\n78\n68\n121\n13\n122\n123\n124\n125\n93\n126\n68\n127\n13\n128\n164" +
+			"\n130\n131\n132\n133\n134\n135\n13\n136\n137\n138\n13\n78\n68\n13\n139\n140\n165\n68\n13\n143\n144\n145\n" +
+			"146\n13\n147\n148\n13\n149\n150\n151\n166\n153\n150\n154\n13\n155\n156\n"
+
+		dmp := New()
+		t1, t2, lineArray := dmp.DiffLinesToChars(text1, text2)
+		diffs := dmp.DiffMain(t1, t2, false)
+		diffs = dmp.DiffCharsToLines(diffs, lineArray)
+		_ = diffs
+	})
+}
