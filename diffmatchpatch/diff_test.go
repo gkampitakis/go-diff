@@ -302,12 +302,12 @@ func TestDiffLinesToChars(t *testing.T) {
 	dmp := New()
 
 	for i, tc := range []TestCase{
-		{"", "alpha\r\nbeta\r\n\r\n\r\n", "", "1,2,3,3", []string{"", "alpha\r\n", "beta\r\n", "\r\n"}},
-		{"a", "b", "1", "2", []string{"", "a", "b"}},
+		{"", "alpha\r\nbeta\r\n\r\n\r\n", "", "\x01\x02\x03\x03", []string{"", "alpha\r\n", "beta\r\n", "\r\n"}},
+		{"a", "b", "\x01", "\x02", []string{"", "a", "b"}},
 		// Omit final newline.
-		{"alpha\nbeta\nalpha", "", "1,2,3", "", []string{"", "alpha\n", "beta\n", "alpha"}},
+		{"alpha\nbeta\nalpha", "", "\x01\x02\x03", "", []string{"", "alpha\n", "beta\n", "alpha"}},
 		// Same lines in Text1 and Text2
-		{"abc\ndefg\n12345\n", "abc\ndef\n12345\n678", "1,2,3", "1,4,3,5", []string{"", "abc\n", "defg\n", "12345\n", "def\n", "678"}},
+		{"abc\ndefg\n12345\n", "abc\ndef\n12345\n678", "\x01\x02\x03", "\x01\x04\x03\x05", []string{"", "abc\n", "defg\n", "12345\n", "def\n", "678"}},
 	} {
 		actualChars1, actualChars2, actualLines := dmp.DiffLinesToChars(tc.Text1, tc.Text2)
 		assertEqual(t, tc.ExpectedChars1, actualChars1, fmt.Sprintf("Test case #%d, %#v", i, tc))
@@ -320,14 +320,14 @@ func TestDiffLinesToChars(t *testing.T) {
 	lineList := []string{
 		"", // Account for the initial empty element of the lines array.
 	}
-	var charList []string
+	var charList []index
 	for x := 1; x < n+1; x++ {
 		lineList = append(lineList, strconv.Itoa(x)+"\n")
-		charList = append(charList, strconv.Itoa(x))
+		charList = append(charList, index(x))
 	}
 	lines := strings.Join(lineList, "")
-	chars := strings.Join(charList[:], ",")
-	assertEqual(t, n, len(strings.Split(chars, ",")))
+	chars := indexesToString(charList)
+	assertEqual(t, n, len(charList))
 
 	actualChars1, actualChars2, actualLines := dmp.DiffLinesToChars(lines, "")
 	assertEqual(t, chars, actualChars1)
@@ -347,8 +347,8 @@ func TestDiffCharsToLines(t *testing.T) {
 	for i, tc := range []TestCase{
 		{
 			Diffs: []Diff{
-				{DiffEqual, "1,2,1"},
-				{DiffInsert, "2,1,2"},
+				{DiffEqual, "\x01\x02\x01"},
+				{DiffInsert, "\x02\x01\x02"},
 			},
 			Lines: []string{"", "alpha\n", "beta\n"},
 
@@ -367,13 +367,13 @@ func TestDiffCharsToLines(t *testing.T) {
 	lineList := []string{
 		"", // Account for the initial empty element of the lines array.
 	}
-	charList := []string{}
+	charList := []index{}
 	for x := 1; x <= n; x++ {
 		lineList = append(lineList, strconv.Itoa(x)+"\n")
-		charList = append(charList, strconv.Itoa(x))
+		charList = append(charList, index(x))
 	}
 	assertEqual(t, n, len(charList))
-	chars := strings.Join(charList[:], ",")
+	chars := indexesToString(charList)
 
 	actual := dmp.DiffCharsToLines([]Diff{{DiffDelete, chars}}, lineList)
 	assertEqual(t, []Diff{{DiffDelete, strings.Join(lineList, "")}}, actual)
@@ -1018,6 +1018,17 @@ func TestDiffPrettyText(t *testing.T) {
 
 			Expected: "a\n\x1b[31m<B>b</B>\x1b[0m\x1b[32mc&d\x1b[0m",
 		},
+		{
+			Diffs: []Diff{
+				{Type: DiffEqual, Text: "a\n"},
+				{Type: DiffDelete, Text: "b\nc\n"},
+				{Type: DiffEqual, Text: "def"},
+				{Type: DiffInsert, Text: "\ng\nh"},
+				{Type: DiffEqual, Text: "\ni"},
+			},
+
+			Expected: "a\n\x1b[31mb\x1b[0m\n\x1b[31mc\x1b[0m\n\x1b[31m\x1b[0mdef\x1b[32m\x1b[0m\n\x1b[32mg\x1b[0m\n\x1b[32mh\x1b[0m\ni",
+		},
 	} {
 		actual := dmp.DiffPrettyText(tc.Diffs)
 		assertEqual(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
@@ -1520,6 +1531,38 @@ func TestMassiveRuneDiffConversion(t *testing.T) {
 	diffs := dmp.DiffMain(t1, t2, false)
 	diffs = dmp.DiffCharsToLines(diffs, tt)
 	assertEqual(t, true, len(diffs) > 0)
+}
+
+func TestDiffPartialLineIndex(t *testing.T) {
+	dmp := New()
+	t1, t2, tt := dmp.DiffLinesToChars(
+		`line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10 text1`,
+		`line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10 text2`)
+	diffs := dmp.DiffMain(t1, t2, false)
+	diffs = dmp.DiffCharsToLines(diffs, tt)
+	assertEqual(t, []Diff{
+		Diff{DiffEqual, "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\n"},
+		Diff{DiffDelete, "line 10 text1"},
+		Diff{DiffInsert, "line 10 text2"},
+	}, diffs)
 }
 
 func BenchmarkDiffMain(bench *testing.B) {
